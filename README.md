@@ -143,7 +143,7 @@ These examples illustrate **software behavior under the tested settings**, not a
 ### 4.1 Equation-library configuration and deployment
 
 <p align="center">
-  <img width="1794" height="1907" alt="fig2_equation_library" src="https://github.com/user-attachments/assets/145e00ba-03aa-44c2-9c47-599de22c6c56" />
+  <img width="1059" height="1125" alt="fig2_equation_library" src="https://github.com/user-attachments/assets/fcd2dc99-9dd9-4306-9f7c-27363815fa5d" />
 </p>
 
 > **Figure 2.** Equation-library management in ForeCarb, including record configuration, parameter editing, and deployment of the validated library.
