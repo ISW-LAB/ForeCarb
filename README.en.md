@@ -1,19 +1,19 @@
-# FORECAST-SW
+# ForeCarb
 
-**Carbon-stock assessment and growth scenario analysis for forest restoration plantings**
+**Integrating allometric-equation management, carbon-stock assessment, and growth-scenario analysis for early-stage forest restoration**
 
 **English** · [한국어](README.ko.md)
 
-FORECAST-SW is an open-source Windows desktop application for assessing live biomass carbon stocks in mixed tree and shrub inventories at forest restoration sites. It combines allometric-equation management, unit-consistent calculation, cross-site comparison, deterministic growth scenarios over a **30-year horizon**, 3D visualization, and XLSX reporting.
+ForeCarb is an open-source Windows desktop application for assessing live biomass carbon stocks in mixed tree and shrub inventories at forest restoration sites. It combines allometric-equation management, unit-consistent calculation, cross-site comparison, deterministic growth scenarios over a **30-year horizon**, 3D visualization, and XLSX reporting.
 
-This README describes FORECAST-SW v1.0 and follows the accompanying manuscript. Figure numbers and Tables 1–3 match the manuscript; installation, build, and repository guidance is provided below.
+This README describes ForeCarb v1.0 and follows the accompanying manuscript. Figure numbers and Tables 1–3 match the manuscript; installation, build, and repository guidance is provided below.
 
 #### Code metadata
 
 | Nr | Description | Value |
 |:---:|---|---|
-| C1 | Current code version | FORECAST-SW v1.0 |
-| C2 | Permanent link to code repository | [FORECAST-SW repository](https://github.com/ISW-LAB/FORECAST-SW) |
+| C1 | Current code version | ForeCarb v1.0 |
+| C2 | Permanent link to code repository | [ForeCarb repository](https://github.com/ISW-LAB/ForeCarb) |
 | C3 | Permanent link to Reproducible Capsule | Not applicable |
 | C4 | Legal Code License | [MIT](LICENSE); [KOGL Type 1](DATA_LICENSE.md) for `species_data.json` |
 | C5 | Code versioning system used | Git |
@@ -34,10 +34,10 @@ This README describes FORECAST-SW v1.0 and follows the accompanying manuscript. 
 Python + PyQt5 for Windows. NumPy (computation), Matplotlib (2D plots), openpyxl (XLSX), PyVista/VTK (optional 3D). Korean and English interfaces use the same computational services; the packaged application runs without a separate Python installation.
 
 <p align="center">
-  <img src="figures/paper/fig1_workflow.png" alt="Software architecture and eight-stage workflow of FORECAST-SW" width="100%">
+  <img src="figures/paper/fig1_workflow.png" alt="Software architecture and eight-stage workflow of ForeCarb" width="100%">
 </p>
 
-> **Figure 1.** Software architecture and eight-stage workflow of FORECAST-SW, from equation-library management to carbon-stock assessment, scenario analysis, and reporting.
+> **Figure 1.** Software architecture and eight-stage workflow of ForeCarb, from equation-library management to carbon-stock assessment, scenario analysis, and reporting.
 
 | Stage | Component | Core content |
 |:---:|---|---|
@@ -66,7 +66,7 @@ All 77 records are selectable in the site-assessment screen. Each record is file
 | International `FOREIGN_SPECIES` | **25** | DBH · RCD · height (+ height, LAI, length) | Expression string + range | ✅ | diameter |
 | **Total** | **77** | | | **77** | **77 diameter · 22 year** |
 
-#### Table 1. Representative allometric equation records from the FORECAST-SW tree and shrub collections, including predictor definitions, fitted diameter ranges, and period-specific growth increments
+#### Table 1. Representative allometric equation records from the ForeCarb tree and shrub collections, including predictor definitions, fitted diameter ranges, and period-specific growth increments
 
 | Scientific name | Allometric equation | Predictor | Fitted range | 1–10 | 11–20 | 21–30 | Reference |
 |---|---|:---:|:---:|---:|---:|---:|---|
@@ -143,10 +143,10 @@ These examples illustrate **software behavior under the tested settings**, not a
 ### 4.1 Equation-library configuration and deployment
 
 <p align="center">
-  <img src="figures/paper/fig2_equation_library.png" alt="Equation-library management in FORECAST-SW" width="100%">
+  <img width="1059" height="1125" alt="fig2_equation_library" src="https://github.com/user-attachments/assets/fcd2dc99-9dd9-4306-9f7c-27363815fa5d" />
 </p>
 
-> **Figure 2.** Equation-library management in FORECAST-SW, including record configuration, parameter editing, and deployment of the validated library.
+> **Figure 2.** Equation-library management in ForeCarb, including record configuration, parameter editing, and deployment of the validated library.
 
 The manager maintains records from four collections. Figure 2 shows the interface organized by restoration-site category, with tree and shrub subtabs and editable columns for coefficients, carbon fractions, fitted limits, and growth increments.
 
@@ -228,10 +228,10 @@ Values outside the fitted ranges were rejected and values at the limits accepted
 ### 4.6 Result reporting
 
 <p align="center">
-  <img src="figures/paper/fig6_xlsx_export.png" alt="Example XLSX output from FORECAST-SW" width="100%">
+  <img src="figures/paper/fig6_xlsx_export.png" alt="Example XLSX output from ForeCarb" width="100%">
 </p>
 
-> **Figure 6.** Example XLSX output from FORECAST-SW showing site-level carbon-stock projections and species-level carbon contributions.
+> **Figure 6.** Example XLSX output from ForeCarb showing site-level carbon-stock projections and species-level carbon contributions.
 
 **(a)** annual tree, shrub, and total stocks per profile across the scenario period · **(b)** species-level stocks and relative contributions. Additional worksheets hold site-comparison results and associated figures.
 
@@ -241,10 +241,10 @@ Values outside the fitted ranges were rejected and values at the limits accepted
 
 | Executable | Role |
 |---|---|
-| `FORECAST-SW.exe` | **Assessment Application** — site assessment, comparison, scenarios |
-| `FORECAST-SW-Equation-Library-Manager.exe` | **Equation Library Manager** — equation editing, validation, deployment |
+| `ForeCarb.exe` | **Assessment Application** — site assessment, comparison, scenarios |
+| `ForeCarb-Equation-Library-Manager.exe` | **Equation Library Manager** — equation editing, validation, deployment |
 
-Both are installed by `FORECAST-SW_Setup_1.0.exe` (no Python required). From source:
+Both are installed by `ForeCarb_Setup_1.0.exe` (no Python required). From source:
 
 ```powershell
 pip install -r requirements.txt
@@ -268,12 +268,12 @@ Tables are organized by site category — **one tab per category** (post-fire na
 
 | Method | Description | Python required |
 |---|---|:---:|
-| **Rebuild the executable** | Rebuild `FORECAST-SW.exe` from the new `species_data.json` | 3.10+ |
-| **Apply the JSON** | Copy `species_data.json` next to the existing `FORECAST-SW.exe` | No |
+| **Rebuild the executable** | Rebuild `ForeCarb.exe` from the new `species_data.json` | 3.10+ |
+| **Apply the JSON** | Copy `species_data.json` next to the existing `ForeCarb.exe` | No |
 
 > When adding a species, fill in the scientific-name column so English mode displays it.
 
-UI strings follow the same pattern: [`translations_ko_en.json`](translations_ko_en.json) holds every Korean-source → English string used by the interface. Edit the English column and restart — no rebuild required; place the edited file next to a deployed `FORECAST-SW.exe` to update it the same way.
+UI strings follow the same pattern: [`translations_ko_en.json`](translations_ko_en.json) holds every Korean-source → English string used by the interface. Edit the English column and restart — no rebuild required; place the edited file next to a deployed `ForeCarb.exe` to update it the same way.
 
 ---
 
@@ -288,7 +288,7 @@ python build_updater.py              # Equation Library Manager (or build_librar
 
 `pyinstaller` need not be installed separately — the scripts create a dedicated venv (`~\.carboncalc_build_venv`); only the first build takes a few minutes. `species_data.json` is bundled automatically.
 
-**Installer (optional):** `build_exe.py --onedir` → `build_updater.py` → compile `installer.iss` with [Inno Setup 6](https://jrsoftware.org/isdl.php) → `installer_output\FORECAST-SW_Setup_1.0.exe`.
+**Installer (optional):** `build_exe.py --onedir` → `build_updater.py` → compile `installer.iss` with [Inno Setup 6](https://jrsoftware.org/isdl.php) → `installer_output\ForeCarb_Setup_1.0.exe`.
 
 ---
 
@@ -334,8 +334,8 @@ python -m unittest discover -s tests -v
 
 ## 10. Citation
 
-> Jeong, K., Jo, G., Kim, J., Kim, H.-K., Kim, C.-B., Park, K. H., Im, S., & Lee, E.
-> *FORECAST-SW: Carbon-stock assessment and growth scenario analysis for forest restoration plantings.* Accompanying manuscript.
+> Jeong, K., Jo, G., Kim, J., Kim, H.-K., Kim, C.-B., Im, S., Park, K. H., & Lee, E.
+> *ForeCarb: Integrating allometric-equation management, carbon-stock assessment, and growth-scenario analysis for early-stage forest restoration.* Accompanying manuscript.
 
 Machine-readable metadata: [`CITATION.cff`](CITATION.cff). **When using an individual allometric equation, also cite its original source publication.**
 
