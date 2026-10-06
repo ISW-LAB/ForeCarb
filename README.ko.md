@@ -1,19 +1,19 @@
-# FORECAST-SW
+# ForeCarb
 
-**산림복원지 탄소저장량 평가 및 성장 시나리오 분석 소프트웨어**
+**초기 산림복원을 위한 상대생장식 관리, 탄소저장량 평가 및 성장 시나리오 분석의 통합**
 
 [English](README.en.md) · **한국어**
 
-FORECAST-SW는 산림복원지의 교목·관목 혼합 인벤토리를 대상으로 살아 있는 식생의 바이오매스 탄소저장량을 평가하는 Windows용 오픈소스 데스크톱 프로그램이다. 상대생장식 관리, 단위 일관성을 유지하는 계산, 대상지 간 비교, **30년 범위의 결정론적 성장 시나리오**, 3D 시각화, XLSX 보고 기능을 통합한다.
+ForeCarb는 산림복원지의 교목·관목 혼합 인벤토리를 대상으로 살아 있는 식생의 바이오매스 탄소저장량을 평가하는 Windows용 오픈소스 데스크톱 프로그램이다. 상대생장식 관리, 단위 일관성을 유지하는 계산, 대상지 간 비교, **30년 범위의 결정론적 성장 시나리오**, 3D 시각화, XLSX 보고 기능을 통합한다.
 
-이 문서는 FORECAST-SW v1.0과 함께 제공되는 논문 원고를 기준으로 작성했다. 그림 번호와 표 1–3은 논문과 일치하며, 설치·빌드·저장소 사용 안내도 함께 제공한다.
+이 문서는 ForeCarb v1.0과 함께 제공되는 논문 원고를 기준으로 작성했다. 그림 번호와 표 1–3은 논문과 일치하며, 설치·빌드·저장소 사용 안내도 함께 제공한다.
 
 #### 코드 메타데이터 (Code metadata)
 
 | Nr | 항목 | 내용 |
 |:---:|---|---|
-| C1 | 현재 코드 버전 | FORECAST-SW v1.0 |
-| C2 | 코드 저장소 영구 링크 | [FORECAST-SW 저장소](https://github.com/ISW-LAB/FORECAST-SW) |
+| C1 | 현재 코드 버전 | ForeCarb v1.0 |
+| C2 | 코드 저장소 영구 링크 | [ForeCarb 저장소](https://github.com/ISW-LAB/ForeCarb) |
 | C3 | 재현 캡슐 영구 링크 | 해당 없음 |
 | C4 | 코드 라이선스 | [MIT](LICENSE); `species_data.json` 은 [공공누리 제1유형](DATA_LICENSE.md) |
 | C5 | 버전 관리 시스템 | Git |
@@ -34,10 +34,10 @@ FORECAST-SW는 산림복원지의 교목·관목 혼합 인벤토리를 대상�
 Windows용 Python + PyQt5 구현. NumPy(계산), Matplotlib(2D 그래프), openpyxl(XLSX), PyVista/VTK(선택적 3D). 한국어·영어 인터페이스는 동일한 계산 서비스를 사용하며, 패키징된 프로그램은 별도 Python 설치 없이 실행된다.
 
 <p align="center">
-  <img src="figures/paper/fig1_workflow.png" alt="FORECAST-SW의 소프트웨어 구조와 8단계 워크플로" width="100%">
+  <img src="figures/paper/fig1_workflow.png" alt="ForeCarb의 소프트웨어 구조와 8단계 워크플로" width="100%">
 </p>
 
-> **Figure 1.** 상대생장식 라이브러리 관리에서 탄소저장량 평가, 시나리오 분석, 보고까지 이어지는 FORECAST-SW의 소프트웨어 구조와 8단계 워크플로.
+> **Figure 1.** 상대생장식 라이브러리 관리에서 탄소저장량 평가, 시나리오 분석, 보고까지 이어지는 ForeCarb의 소프트웨어 구조와 8단계 워크플로.
 
 | 단계 | 담당 | 핵심 내용 |
 |:---:|---|---|
@@ -66,7 +66,7 @@ Windows용 Python + PyQt5 구현. NumPy(계산), Matplotlib(2D 그래프), openp
 | 국외 `FOREIGN_SPECIES` | **25** | DBH · RCD · 수고 (+ 수고·LAI·길이) | 수식 문자열 + 범위 | ✅ | 직경별 |
 | **합계** | **77** | | | **77** | **직경별 77 · 연도별 22** |
 
-#### 표 1. FORECAST-SW 교목·관목 컬렉션의 대표 상대생장식 레코드 — 예측변수 정의, 적합 직경범위, 기간별 생장량
+#### 표 1. ForeCarb 교목·관목 컬렉션의 대표 상대생장식 레코드 — 예측변수 정의, 적합 직경범위, 기간별 생장량
 
 | 학명 | 상대생장식 | 예측변수 | 적합범위 | 1–10 | 11–20 | 21–30 | Reference |
 |---|---|:---:|:---:|---:|---:|---:|---|
@@ -143,10 +143,10 @@ v_i(t) = D_min,i ≤ D_i(t) ≤ D_max,i 이면 1, 아니면 0                   
 ### 4.1 상대생장식 라이브러리 구성과 배포
 
 <p align="center">
-  <img src="figures/paper/fig2_equation_library.png" alt="FORECAST-SW의 상대생장식 라이브러리 관리" width="100%">
+  <img src="figures/paper/fig2_equation_library.png" alt="ForeCarb의 상대생장식 라이브러리 관리" width="100%">
 </p>
 
-> **Figure 2.** 레코드 구성, 파라미터 편집, 검증된 라이브러리 배포를 포함한 FORECAST-SW의 상대생장식 라이브러리 관리.
+> **Figure 2.** 레코드 구성, 파라미터 편집, 검증된 라이브러리 배포를 포함한 ForeCarb의 상대생장식 라이브러리 관리.
 
 Manager는 4개 컬렉션의 레코드를 관리한다. Figure 2의 화면은 복원 대상지 유형별 탭과 교목·관목 하위 탭으로 구성되며, 계수·탄소계수·적합 한계·기간별 생장량을 각각의 열에서 편집할 수 있다.
 
@@ -228,10 +228,10 @@ Manager는 4개 컬렉션의 레코드를 관리한다. Figure 2의 화면은 �
 ### 4.6 결과 보고
 
 <p align="center">
-  <img src="figures/paper/fig6_xlsx_export.png" alt="FORECAST-SW의 XLSX 출력 예시" width="100%">
+  <img src="figures/paper/fig6_xlsx_export.png" alt="ForeCarb의 XLSX 출력 예시" width="100%">
 </p>
 
-> **Figure 6.** 대상지 단위 탄소저장량 추정과 수종별 탄소 기여도를 보여주는 FORECAST-SW의 XLSX 출력 예시.
+> **Figure 6.** 대상지 단위 탄소저장량 추정과 수종별 탄소 기여도를 보여주는 ForeCarb의 XLSX 출력 예시.
 
 **(a)** 시나리오 기간 전체에 걸친 프로파일별 연차 교목·관목·총 저장량 · **(b)** 수종별 저장량과 상대 기여도. 추가 워크시트에 대상지 비교 결과와 해당 그림이 저장된다.
 
@@ -241,10 +241,10 @@ Manager는 4개 컬렉션의 레코드를 관리한다. Figure 2의 화면은 �
 
 | 실행 파일 | 역할 |
 |---|---|
-| `FORECAST-SW.exe` | **Assessment Application** — 대상지 평가·비교·시나리오 |
-| `FORECAST-SW-Equation-Library-Manager.exe` | **Equation Library Manager** — 상대생장식 편집·검증·배포 |
+| `ForeCarb.exe` | **Assessment Application** — 대상지 평가·비교·시나리오 |
+| `ForeCarb-Equation-Library-Manager.exe` | **Equation Library Manager** — 상대생장식 편집·검증·배포 |
 
-`FORECAST-SW_Setup_1.0.exe` 로 두 프로그램이 함께 설치된다(Python 불필요). 소스 실행:
+`ForeCarb_Setup_1.0.exe` 로 두 프로그램이 함께 설치된다(Python 불필요). 소스 실행:
 
 ```powershell
 pip install -r requirements.txt
@@ -268,12 +268,12 @@ Manager는 `species_data.json` 을 편집 가능한 표로 연다(Figure 2). 저
 
 | 방식 | 내용 | Python 필요 |
 |---|---|:---:|
-| **exe 재빌드** | 새 `species_data.json` 으로 `FORECAST-SW.exe` 재빌드 | 3.10+ |
-| **JSON 적용** | 기존 `FORECAST-SW.exe` 옆에 `species_data.json` 복사 | 불필요 |
+| **exe 재빌드** | 새 `species_data.json` 으로 `ForeCarb.exe` 재빌드 | 3.10+ |
+| **JSON 적용** | 기존 `ForeCarb.exe` 옆에 `species_data.json` 복사 | 불필요 |
 
 > 새 수종을 추가할 때는 학명 열도 채워야 영문 모드에서 학명으로 표기된다.
 
-UI 문구도 같은 방식이다: [`translations_ko_en.json`](translations_ko_en.json) 이 화면에 쓰이는 모든 한글 원문 → 영문 대응표를 담고 있다. 영문 값을 수정하고 재시작하면 바로 반영되며(재빌드 불필요), 배포된 `FORECAST-SW.exe` 옆에 수정한 파일을 두면 동일하게 적용된다.
+UI 문구도 같은 방식이다: [`translations_ko_en.json`](translations_ko_en.json) 이 화면에 쓰이는 모든 한글 원문 → 영문 대응표를 담고 있다. 영문 값을 수정하고 재시작하면 바로 반영되며(재빌드 불필요), 배포된 `ForeCarb.exe` 옆에 수정한 파일을 두면 동일하게 적용된다.
 
 ---
 
@@ -288,7 +288,7 @@ python build_updater.py              # Equation Library Manager (또는 build_li
 
 `pyinstaller` 를 따로 설치할 필요는 없다 — 스크립트가 전용 venv(`~\.carboncalc_build_venv`)를 자동 생성하며 최초 1회만 몇 분 걸린다. `species_data.json` 은 자동 동봉된다.
 
-**설치 마법사(선택):** `build_exe.py --onedir` → `build_updater.py` → [Inno Setup 6](https://jrsoftware.org/isdl.php) 으로 `installer.iss` 컴파일 → `installer_output\FORECAST-SW_Setup_1.0.exe`.
+**설치 마법사(선택):** `build_exe.py --onedir` → `build_updater.py` → [Inno Setup 6](https://jrsoftware.org/isdl.php) 으로 `installer.iss` 컴파일 → `installer_output\ForeCarb_Setup_1.0.exe`.
 
 ---
 
@@ -334,8 +334,8 @@ python -m unittest discover -s tests -v
 
 ## 10. 인용
 
-> Jeong, K., Jo, G., Kim, J., Kim, H.-K., Kim, C.-B., Park, K. H., Im, S., & Lee, E.
-> *FORECAST-SW: Carbon-stock assessment and growth scenario analysis for forest restoration plantings.* Accompanying manuscript.
+> Jeong, K., Jo, G., Kim, J., Kim, H.-K., Kim, C.-B., Im, S., Park, K. H., & Lee, E.
+> *ForeCarb: Integrating allometric-equation management, carbon-stock assessment, and growth-scenario analysis for early-stage forest restoration.* Accompanying manuscript.
 
 기계가독 메타데이터: [`CITATION.cff`](CITATION.cff). **개별 상대생장식을 사용할 때는 해당 식의 원 출처 문헌도 함께 인용해야 한다.**
 
