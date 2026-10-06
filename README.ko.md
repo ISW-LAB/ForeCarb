@@ -143,7 +143,7 @@ v_i(t) = D_min,i ≤ D_i(t) ≤ D_max,i 이면 1, 아니면 0                   
 ### 4.1 상대생장식 라이브러리 구성과 배포
 
 <p align="center">
-  <img width="1794" height="1907" alt="fig2_equation_library" src="https://github.com/user-attachments/assets/145e00ba-03aa-44c2-9c47-599de22c6c56" />
+  <img width="1059" height="1125" alt="fig2_equation_library" src="https://github.com/user-attachments/assets/fcd2dc99-9dd9-4306-9f7c-27363815fa5d" />
 </p>
 
 > **Figure 2.** 레코드 구성, 파라미터 편집, 검증된 라이브러리 배포를 포함한 ForeCarb의 상대생장식 라이브러리 관리.
