@@ -10,13 +10,30 @@ import pyvista as pv
 from vtkmodules.util.numpy_support import numpy_to_vtk
 from vtkmodules.vtkCommonCore import vtkPoints
 from vtkmodules.vtkCommonDataModel import vtkCellArray, vtkPolyData
-from vtkmodules.vtkRenderingCore import vtkActor, vtkGlyph3DMapper, vtkPointPicker, vtkPolyDataMapper
+from vtkmodules.vtkRenderingCore import (
+    vtkActor, vtkBillboardTextActor3D, vtkGlyph3DMapper, vtkPointPicker, vtkPolyDataMapper,
+    vtkTextProperty,
+)
 
-from ..i18n import tr
+from ..i18n import LANG_KO, get_language, tr
 from ..typography import AXIS_LABEL_PT, AXIS_TITLE_PT
 from .growth_models import render_states
 from .models import RegionVisualizationSnapshot, RenderState
 from .species_profiles import profile_by_key
+
+
+def _find_korean_font_file() -> str | None:
+    """한글 축 제목용 TrueType 글꼴 경로 (없으면 None → VTK 기본 글꼴 유지)."""
+    import os
+    fonts = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+    for name in ("malgun.ttf", "gulim.ttc", "batang.ttc"):
+        path = os.path.join(fonts, name)
+        if os.path.exists(path):
+            return path
+    return None
+
+
+_KOREAN_FONT_FILE = _find_korean_font_file()
 
 
 class VegetationRenderer:
@@ -32,6 +49,7 @@ class VegetationRenderer:
         self._pick_dataset: vtkPolyData | None = None
         self._pick_instance_ids: tuple[int, ...] = ()
         self._z_axis_max = 1.0
+        self._z_title_actor: vtkBillboardTextActor3D | None = None
 
     def clear(self) -> None:
         for actor in self._actors:
@@ -42,6 +60,7 @@ class VegetationRenderer:
         self._pick_dataset = None
         self._pick_instance_ids = ()
         self.plotter.remove_bounds_axes()
+        self._remove_z_title()
         self._z_axis_max = 1.0
         if self._ground_actor is not None:
             self.plotter.remove_actor(self._ground_actor)
@@ -100,8 +119,12 @@ class VegetationRenderer:
         max_height = max((s.rendered_height_m.value for s in states), default=0.0)
         z_max, _step, label_count, label_format = self._nice_height_axis(max_height)
         self.plotter.remove_bounds_axes()
+        self._remove_z_title()
+        # VTK 축 제목은 vtkVectorText(ASCII 전용)로 그려져 한글이 사라진다.
+        # 한글이면 축 제목을 비우고, 같은 위치에 FreeType 글꼴 파일 기반 라벨을 따로 띄운다.
+        korean_title = get_language() == LANG_KO and _KOREAN_FONT_FILE is not None
         axis = self.plotter.show_grid(
-            xtitle="X (m)", ytitle="Y (m)", ztitle=tr("수고 (m)"),
+            xtitle="X (m)", ytitle="Y (m)", ztitle=" " if korean_title else tr("수고 (m)"),
             bounds=(0, self.snapshot.area_w, 0, self.snapshot.area_h, 0, z_max),
             # font_family 는 VTK 가 아는 3종(arial/courier/times)만 허용된다.
             n_zlabels=label_count, font_family="arial", font_size=AXIS_LABEL_PT,
@@ -111,7 +134,30 @@ class VegetationRenderer:
         for axis_name in ("X", "Y", "Z"):
             getattr(axis, f"Get{axis_name}AxesLabelProperty")().SetFontSize(AXIS_LABEL_PT)
             getattr(axis, f"Get{axis_name}AxesTitleProperty")().SetFontSize(AXIS_TITLE_PT)
+        if korean_title:
+            self._add_z_title(tr("수고 (m)"), z_max)
         self._z_axis_max = z_max
+
+    def _add_z_title(self, text: str, z_max: float) -> None:
+        """기본 등각 시점에서 Z축이 놓이는 모서리(x = 가로, y = 0) 위에 축 제목을 둔다."""
+        actor = vtkBillboardTextActor3D()
+        actor.SetInput(text)
+        actor.SetPosition(self.snapshot.area_w, 0.0, z_max * 1.12)
+        actor.PickableOff()
+        prop = actor.GetTextProperty()
+        prop.SetFontFamily(vtkTextProperty.GetFontFamilyFromString("File"))
+        prop.SetFontFile(_KOREAN_FONT_FILE)
+        prop.SetFontSize(AXIS_TITLE_PT)
+        prop.SetColor(0.0, 0.0, 0.0)
+        prop.SetJustificationToCentered()
+        prop.SetVerticalJustificationToBottom()
+        self.plotter.renderer.AddActor(actor)
+        self._z_title_actor = actor
+
+    def _remove_z_title(self) -> None:
+        if self._z_title_actor is not None:
+            self.plotter.renderer.RemoveActor(self._z_title_actor)
+            self._z_title_actor = None
 
     @staticmethod
     def _source_for(profile_key: str, component: str, layer: int):

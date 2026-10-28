@@ -22,7 +22,7 @@ from __future__ import annotations
 from PyQt5.QtWidgets import QApplication
 
 from .ui_scale import ui_scale
-from .typography import HEADING_PT, scaled_point_size
+from .typography import BODY_PT, HEADING_PT, scaled_point_size
 
 
 # ─────────────────────────── 색상 팔레트 ───────────────────────────
@@ -55,6 +55,7 @@ def build_stylesheet(scale: float = 1.0) -> str:
     /* ===== 전역 ===== */
     QMainWindow, QDialog {{ background: {BG}; }}
     QWidget {{ color: {TEXT}; }}
+    QMessageBox QLabel {{ font-size: {scaled_point_size(BODY_PT, scale)}pt; }}
     QToolTip {{
         background: {TEXT}; color: #FFFFFF; border: none;
         padding: {s(4)}px {s(8)}px; border-radius: {radius_sm}px;

@@ -16,7 +16,7 @@ have not been repeated for the shared-year UI changes.
 
 ## Checks performed
 
-1. `python -m unittest discover -s tests -v`: 47 tests passed, including the
+1. `python -m unittest discover -s tests -v`: 55 tests passed, including the
    English coverage of both UIs (the assessment app and the Equation Library
    Manager, which carries its own translation table), the
    shared-centimeter DBH/RCD contract, legacy shrub-equation equivalence,

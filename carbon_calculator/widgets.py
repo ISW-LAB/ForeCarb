@@ -273,6 +273,7 @@ class LinearGauge(QWidget):
         self._min = float(minimum)
         self._max = float(maximum)
         self._value = 0.0
+        self._value2: float | None = None
         self._major_ticks = list(major_ticks) if major_ticks else self._default_ticks()
         self._band_h = px(34)
         self._apply_geometry()
@@ -322,10 +323,33 @@ class LinearGauge(QWidget):
         self._max = max(self._min + 1e-9, float(maximum))
         self._major_ticks = list(major_ticks) if major_ticks else self._default_ticks()
         self._value = max(self._min, min(self._max, self._value))
+        if self._value2 is not None:
+            self._value2 = max(self._min, min(self._max, self._value2))
         self.update()
 
     def value(self) -> float:
         return self._value
+
+    def setSecondaryValue(self, v: float | None) -> None:
+        """보조 값(예: 생존률 반영). None 이면 막대 하나만 그린다.
+
+        보조 값이 있으면 기본 값 막대는 옅게, 보조 값은 그 안쪽에 진한 얇은 막대로 그려
+        두 결과를 한 눈금 위에서 비교할 수 있게 한다.
+        """
+        self._value2 = None if v is None else max(self._min, min(self._max, float(v)))
+        self.update()
+
+    def secondaryValue(self) -> float | None:
+        return self._value2
+
+    @staticmethod
+    def _level_color(ratio: float) -> QColor:
+        """채움 비율에 따른 색: green → orange → red."""
+        if ratio < 0.6:
+            return QColor(0x2E, 0x8B, 0x57)
+        if ratio < 0.85:
+            return QColor(0xE0, 0x9A, 0x2B)
+        return QColor(0xC0, 0x39, 0x2B)
 
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
@@ -334,7 +358,7 @@ class LinearGauge(QWidget):
         metrics = p.fontMetrics()
 
         w = self.width()
-        labels = [f"{tick:g}" for tick in self._major_ticks]
+        labels = [f"{tick:,g}" for tick in self._major_ticks]
 
         # 좌우 여백 = 양 끝 눈금값의 절반 폭 (끝 숫자가 잘리지 않도록)
         pad = px(2)
@@ -359,23 +383,40 @@ class LinearGauge(QWidget):
         ratio = max(0.0, min(1.0, ratio))
         fill_rect = QRectF(track_rect.x(), track_rect.y(),
                            track_rect.width() * ratio, track_rect.height())
-        # color: green → orange → red
-        if ratio < 0.6:
-            color = QColor(0x2E, 0x8B, 0x57)
-        elif ratio < 0.85:
-            color = QColor(0xE0, 0x9A, 0x2B)
-        else:
-            color = QColor(0xC0, 0x39, 0x2B)
+        color = self._level_color(ratio)
+        if self._value2 is not None:
+            color.setAlpha(95)                   # 보조 값이 있으면 기본 막대는 옅게
         p.setPen(Qt.NoPen)
         p.setBrush(color)
         if fill_rect.width() > 0:
             p.drawRoundedRect(fill_rect, radius, radius)
 
+        # 보조 값(생존률 반영): 트랙 안쪽 가운데의 진한 얇은 막대
+        if self._value2 is not None:
+            ratio2 = max(0.0, min(1.0, (self._value2 - self._min) / span))
+            inner_h = track_rect.height() * 0.6
+            inner = QRectF(track_rect.x(), track_rect.center().y() - inner_h / 2,
+                           track_rect.width() * ratio2, inner_h)
+            if inner.width() > 0:
+                p.setBrush(self._level_color(ratio2).darker(115))
+                r2 = min(radius, inner_h / 2)
+                p.drawRoundedRect(inner, r2, r2)
+
         # Ticks + labels
         p.setPen(QPen(QColor(80, 80, 80), 1))
         tick_bottom = int(track_rect.bottom()) + px(self._TICK_LEN)
         baseline = tick_bottom + px(self._TICK_GAP) + metrics.ascent()
-        for tick, label in zip(self._major_ticks, labels):
+        # 좁은 배치(게이지 가로 1행)에서 눈금값이 겹치면 k 개마다 하나만 쓴다.
+        widest = max((metrics.horizontalAdvance(t) for t in labels), default=0) + px(8)
+        slots = max(1, len(labels) - 1)
+        step = 1
+        while step < slots and track_rect.width() * step / slots < widest:
+            step += 1
+        for i, (tick, label) in enumerate(zip(self._major_ticks, labels)):
+            if i % step and i != len(labels) - 1:
+                label = ""
+            elif i != len(labels) - 1 and len(labels) - 1 - i < step and i:
+                label = ""                       # 마지막 값과 겹치는 바로 앞 값
             t_ratio = (tick - self._min) / span
             x = track_rect.x() + track_rect.width() * t_ratio
             p.drawLine(int(x), int(track_rect.bottom()), int(x), tick_bottom)

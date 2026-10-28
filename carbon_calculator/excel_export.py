@@ -194,6 +194,107 @@ def _sheet_graphs(wb: Workbook, payload: dict) -> None:
         row += span
 
 
+# ─────────────────────────── 생존률 반영 시트 ───────────────────────────
+
+def _survival_series(cat_payload: dict):
+    surv = (cat_payload or {}).get("survival")
+    if not surv or not surv.get("years"):
+        return None
+    return surv
+
+
+def _sheet_survival_single(wb: Workbook, payload: dict) -> None:
+    """생존률_반영: 연도별 전량 생존 vs 생존률 반영 (교목·관목·합계) + 수종별 생존율."""
+    ws = wb.create_sheet(tr("생존률_반영"))
+    ws.cell(1, 1, tr("생존률 반영 탄소저장량 (경과연도별)")).font = TITLE_FONT
+    ws.cell(2, 1, tr("N(t) = 수량 × 현재 생존율 × 연간 생존율^t  ·  전량 생존 값은 기본 결과와 같습니다."))
+    tree, shrub = _survival_series(payload["tree"]), _survival_series(payload["shrub"])
+    if tree is None and shrub is None:
+        ws.cell(4, 1, tr("추정 데이터가 없습니다."))
+        return
+    years = (tree or shrub)["years"]
+    n = len(years)
+    zero = {"all": [0.0] * n, "with_survival": [0.0] * n, "individuals_survival": [0.0] * n}
+    tree, shrub = tree or zero, shrub or zero
+    headers = [tr("경과연도(년)"),
+               tr("교목 전량 생존(kgC)"), tr("교목 생존률 반영(kgC)"),
+               tr("관목 전량 생존(kgC)"), tr("관목 생존률 반영(kgC)"),
+               tr("합계 전량 생존(kgC)"), tr("합계 생존률 반영(kgC)"), tr("생존 개체 수(주)")]
+    for c, h in enumerate(headers, 1):
+        ws.cell(4, c, h)
+    _style_header_row(ws, 4, len(headers))
+    for i, yr in enumerate(years):
+        r = i + 5
+        c = ws.cell(r, 1, int(yr)); c.alignment = CENTER; c.border = BORDER
+        vals = [tree["all"][i], tree["with_survival"][i], shrub["all"][i], shrub["with_survival"][i],
+                tree["all"][i] + shrub["all"][i], tree["with_survival"][i] + shrub["with_survival"][i]]
+        for j, v in enumerate(vals, 2):
+            _num(ws.cell(r, j), round(v, 2))
+        _num(ws.cell(r, 8), round(tree["individuals_survival"][i] + shrub["individuals_survival"][i], 1), "#,##0.0")
+
+    r = len(years) + 7
+    ws.cell(r, 1, tr("수종별 생존율")).font = TITLE_FONT
+    r += 1
+    for c, h in enumerate([tr("구분"), tr("수종"), tr("수량"), tr("현재 생존율(%)"), tr("연간 생존율(%)")], 1):
+        ws.cell(r, c, h)
+    _style_header_row(ws, r, 5)
+    for kind_kr, key in _categories():
+        for row in payload[key].get("rows", []):
+            r += 1
+            ws.cell(r, 1, kind_kr).alignment = CENTER
+            ws.cell(r, 2, species_name(row["species"])).alignment = LEFT
+            _num(ws.cell(r, 3), row["quantity"], "#,##0")
+            _num(ws.cell(r, 4), row.get("survival_initial", 100.0), "0.0")
+            _num(ws.cell(r, 5), row.get("survival_annual", 100.0), "0.0")
+    _set_widths(ws, [12, 16, 18, 16, 18, 16, 18, 15])
+    ws.freeze_panes = ws.cell(5, 2)
+
+
+def _sheet_survival_all(wb: Workbook, payloads: list) -> None:
+    """통합본 생존률_반영: 지역별 교목·관목·총합계(생존률 반영) — 지역별_추정치와 같은 배치."""
+    ws = wb.create_sheet(tr("생존률_반영"))
+    ws.cell(1, 1, tr("지역별 생존률 반영 탄소저장량 (경과연도별)")).font = TITLE_FONT
+    ws.cell(2, 1, tr("N(t) = 수량 × 현재 생존율 × 연간 생존율^t  ·  전량 생존 결과는 '지역별_추정치' 시트"))
+    regions, ref_years = [], None
+    for p in payloads:
+        tree, shrub = _survival_series(p["tree"]), _survival_series(p["shrub"])
+        years = (tree or shrub or {}).get("years")
+        if years and ref_years is None:
+            ref_years = years
+        regions.append(((p.get("region") or {}).get("name") or tr("지역"), tree, shrub))
+    if ref_years is None:
+        ws.cell(4, 1, tr("추정 데이터가 없습니다."))
+        return
+    n = len(ref_years)
+    c = ws.cell(3, 1, tr("경과연도(년)"))
+    c.fill = HEADER_FILL; c.font = HEADER_FONT; c.alignment = CENTER; c.border = BORDER
+    ws.merge_cells(start_row=3, start_column=1, end_row=4, end_column=1)
+    col = 2
+    for name, _t, _s in regions:
+        c = ws.cell(3, col, name)
+        c.fill = HEADER_FILL; c.font = HEADER_FONT; c.alignment = CENTER; c.border = BORDER
+        ws.merge_cells(start_row=3, start_column=col, end_row=3, end_column=col + 3)
+        for k, sub in enumerate([tr("교목(kgC)"), tr("관목(kgC)"), tr("총합계(kgC)"), tr("생존 개체(주)")]):
+            cc = ws.cell(4, col + k, sub)
+            cc.fill = SUB_HEADER_FILL; cc.font = Font(bold=True, color="FFFFFF")
+            cc.alignment = CENTER; cc.border = BORDER
+        col += 4
+    for i, yr in enumerate(ref_years):
+        r = i + 5
+        c = ws.cell(r, 1, int(yr)); c.alignment = CENTER; c.border = BORDER
+        col = 2
+        for _name, tree, shrub in regions:
+            tv = tree["with_survival"][i] if tree and i < len(tree["with_survival"]) else 0.0
+            sv = shrub["with_survival"][i] if shrub and i < len(shrub["with_survival"]) else 0.0
+            nv = sum(x["individuals_survival"][i] for x in (tree, shrub)
+                     if x and i < len(x["individuals_survival"]))
+            _num(ws.cell(r, col), round(tv, 2)); _num(ws.cell(r, col + 1), round(sv, 2))
+            _num(ws.cell(r, col + 2), round(tv + sv, 2)); _num(ws.cell(r, col + 3), round(nv, 1), "#,##0.0")
+            col += 4
+    _set_widths(ws, [12] + [13, 13, 14, 13] * len(regions))
+    ws.freeze_panes = ws.cell(5, 2)
+
+
 # ─────────────────────────── 진입점 (단일 지역) ───────────────────────────
 
 def export_carbon1_to_excel(path: str, payload: dict) -> None:
@@ -208,6 +309,7 @@ def export_carbon1_to_excel(path: str, payload: dict) -> None:
     _fill_projection_ws(ws, payload["tree"].get("projection"), tr("교목"))
     _sheet_projection(wb, payload, "shrub", tr("관목"))
     _sheet_contribution(wb, payload)
+    _sheet_survival_single(wb, payload)
     _sheet_graphs(wb, payload)
     wb.save(path)
 
@@ -302,7 +404,8 @@ def _sheet_all_projections(wb: Workbook, payloads: list) -> None:
             _num(ws.cell(row, col),     round(sv,      2)); col += 1
             _num(ws.cell(row, col),     round(tv + sv, 2)); col += 1
 
-    _set_widths(ws, [12] + [18, 18, 18] * n_regions)
+    # 값(예: 6,759.60)과 머리글('교목합계(kgC)')이 들어가는 최소 폭 — 넓으면 표가 불필요하게 퍼진다.
+    _set_widths(ws, [12] + [15, 15, 15] * n_regions)
     ws.freeze_panes = ws.cell(4, 2)
 
 
@@ -345,7 +448,7 @@ def _sheet_all_contributions(wb: Workbook, payloads: list) -> None:
 
         r += 1  # 빈 줄 구분
 
-    _set_widths(ws, [8, 30, 16, 12])
+    _set_widths(ws, [8, 24, 15, 11])
 
 
 def _sheet_comparison(wb: Workbook, comparison_data: list) -> None:
@@ -562,6 +665,7 @@ def export_all_regions_to_excel(path: str, payloads: list, comparison_data: list
     wb = Workbook()
     _sheet_all_projections(wb, payloads)
     _sheet_all_contributions(wb, payloads)
+    _sheet_survival_all(wb, payloads)
     _sheet_comparison(wb, comparison_data)
     _sheet_all_graphs(wb, payloads, comparison_data)
     wb.save(path)

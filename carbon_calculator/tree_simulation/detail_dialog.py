@@ -54,10 +54,10 @@ def _profile_pixmap(info: InstanceInspection) -> QPixmap:
 class VegetationDetailDialog(QDialog):
     def __init__(self, info: InstanceInspection, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(tr("{species} · Year {year} 개체 정보")
+        self.setWindowTitle(tr("{species} · {year}년 개체 정보")
                             .format(species=species_name(info.species), year=info.year))
         self.setModal(False)
-        self.setMinimumWidth(px(590))
+        self.setMinimumWidth(px(980))
         root = QVBoxLayout(self)
         body = QHBoxLayout()
         image = QLabel()
@@ -71,7 +71,7 @@ class VegetationDetailDialog(QDialog):
         diameter_name = "DBH" if info.kind == "tree" else "RCD"
         rows = (
             (tr("수종"), species_name(info.species)), (tr("구분"), kind_label),
-            (tr("경과 연도"), f"Year {info.year}"),
+            (tr("경과 연도"), tr("{year}년").format(year=info.year)),
             (tr("같은 입력 그룹 수량"),
              tr("{n:,}주").format(n=info.group_quantity)),
             (info.predictor_label or tr("현재 {name}").format(name=diameter_name),
@@ -79,8 +79,8 @@ class VegetationDetailDialog(QDialog):
             (tr("현재 개체 탄소저장량"),
              tr("{carbon:,.4f} kgC/주").format(carbon=info.carbon_kgc)),
             (tr("상대생장식 계수"), info.formula or f"a={info.a:g} · b={info.b:g} · CF={info.cf:g}"),
-            (tr("직경 성장률"),
-             info.scenario_note or tr("1~10년 {y10:g} · 11~20년 {y20:g} · 21년+ {y21:g} cm/yr")
+            (tr("연간 직경생장량"),
+             info.scenario_note or tr("1~10년 {y10:g} · 11~20년 {y20:g} · 21~30년 {y21:g} cm/yr")
              .format(y10=info.growth_y10, y20=info.growth_y20, y21=info.growth_y21)),
             (tr("지역 내 위치"), f"X {info.x_m:,.2f} m · Y {info.y_m:,.2f} m"),
             (tr("표현 줄기 직경 (시각화용)"), f"{info.rendered_trunk_diameter_m:,.3f} m"),
@@ -88,7 +88,7 @@ class VegetationDetailDialog(QDialog):
             (tr("표현 수관 폭 (시각화용)"), f"{info.crown_width_m:,.2f} m"),
             (tr("표현 수관 길이 (시각화용)"), f"{info.crown_length_m:,.2f} m"),
             (tr("표현 풍성함 (시각화용)"), f"{info.visual_development * 100:,.0f}%"),
-            (tr("데이터 구분"), info.scenario_note or tr("DBH/RCD·탄소: 기존 프로젝트 데이터 / 수고·수관·풍성함: visual fallback")),
+            (tr("데이터 구분"), info.scenario_note or tr("DBH/RCD·탄소: 상대생장식 라이브러리 / 수고·수관·풍성함: 시각화용 설정값")),
         )
         for label, value in rows:
             field = QLabel(value); field.setWordWrap(True); field.setTextInteractionFlags(Qt.TextSelectableByMouse)

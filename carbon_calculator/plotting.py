@@ -211,7 +211,7 @@ class MatplotlibCanvas(FigureCanvasQTAgg):
                         xlabel: str | None = None) -> None:
         # 기본값을 import 시점에 굳히면 언어 설정 전 문자열이 박힌다 → 호출 시 해석.
         ylabel = tr("탄소저장량 (kgC)") if ylabel is None else ylabel
-        xlabel = tr("경과 기간 (Years)") if xlabel is None else xlabel
+        xlabel = tr("경과 기간 (년)") if xlabel is None else xlabel
         self._teardown_hover()
         self.ax.clear()
         line, = self.ax.plot(
@@ -242,7 +242,7 @@ class MatplotlibCanvas(FigureCanvasQTAgg):
         # Resolve translated defaults at call time so the selected startup
         # language is reflected even though this module was imported earlier.
         ylabel = tr("탄소저장량 (kgC)") if ylabel is None else ylabel
-        xlabel = tr("경과 기간 (Years)") if xlabel is None else xlabel
+        xlabel = tr("경과 기간 (년)") if xlabel is None else xlabel
         self._teardown_hover()
         self.ax.clear()
         if not series:
@@ -283,6 +283,48 @@ class MatplotlibCanvas(FigureCanvasQTAgg):
         self._install_hover(specs, xlabel, ylabel)
         self._fit_axes_text()
         self._fit_title()
+        self.draw_idle()
+
+    def plot_survival_projection(self, years, groups, ylabel: str | None = None,
+                                 xlabel: str | None = None) -> None:
+        """전량 생존(실선)과 생존률 반영(점선)을 같은 색으로 짝지어 그린다.
+
+        groups: [(name, color, all_survive, with_survival), ...]
+        """
+        ylabel = tr("탄소저장량 (kgC)") if ylabel is None else ylabel
+        xlabel = tr("경과 기간 (년)") if xlabel is None else xlabel
+        self._teardown_hover()
+        self.ax.clear()
+        if not groups:
+            self.show_message(tr("표시할 항목이 없습니다."))
+            return
+        from matplotlib.lines import Line2D
+        specs: list = []
+        handles: list = []
+        for name, color, base, surv in groups:
+            line, = self.ax.plot(years, base, color=color, linewidth=1.6, alpha=0.55)
+            line.set_pickradius(6)
+            specs.append((line, list(years), list(base), tr("{name} · 전량 생존").format(name=name)))
+            line, = self.ax.plot(years, surv, color=color, linewidth=2.4, linestyle="--",
+                                 marker="o", markersize=3.2)
+            line.set_pickradius(6)
+            specs.append((line, list(years), list(surv), tr("{name} · 생존률 반영").format(name=name)))
+            handles.append(Line2D([], [], color=color, linewidth=2.4, label=name))
+        # 범례는 '수종(색) 하나씩 + 선 모양 2개' 로 줄여 그래프 높이를 잠식하지 않게 한다.
+        handles.append(Line2D([], [], color="#555555", linewidth=1.6, alpha=0.7,
+                              label=tr("실선: 전량 생존")))
+        handles.append(Line2D([], [], color="#555555", linewidth=2.4, linestyle="--",
+                              label=tr("점선: 생존률 반영")))
+        self.ax.set_xlabel(xlabel)
+        self.ax.set_ylabel(ylabel)
+        self.ax.grid(True, alpha=0.4)
+        self.ax.legend(
+            handles=handles, fontsize=_fs(PLOT_LEGEND_PT), loc="upper left",
+            bbox_to_anchor=(1.01, 1.0), framealpha=0.95, borderaxespad=0.0,
+            ncol=1 + (len(handles) - 1) // 5,
+        )
+        self._install_hover(specs, xlabel, ylabel)
+        self._fit_axes_text()
         self.draw_idle()
 
     def show_message(self, message: str) -> None:
@@ -623,7 +665,8 @@ class MatplotlibCanvas(FigureCanvasQTAgg):
             )
 
         self.ax.set_xticks([])
-        self.ax.set_ylabel(tr("면적 정규화 탄소밀도 (kgC/㎡)"))
+        # 제목이 '면적 정규화 탄소밀도' 이므로 축 이름은 짧게 둬 축 높이 안에 들어가게 한다.
+        self.ax.set_ylabel(tr("탄소밀도 (kgC/㎡)"))
         self.ax.set_ylim(0, top * 1.18 if top > 0 else 1.0)
         if show_title:
             self._set_title(tr("지역별 면적 정규화 탄소밀도"), fontweight="bold")

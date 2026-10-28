@@ -391,7 +391,7 @@ class Carbon2MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(
-            tr("FORECAST-SW (Ver. {version} - 탄소저장량 기여도)")
+            tr("ForeCarb (Ver. {version} - 탄소저장량 기여도)")
             .format(version=__version__)
         )
         # 창 크기는 combined_window(통합 실행 진입점 main.py) 에서 설정.

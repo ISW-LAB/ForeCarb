@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: MIT
 # -*- coding: utf-8 -*-
 """
-FORECAST-SW Equation Library Manager (self-contained).
+ForeCarb Equation Library Manager (self-contained).
 
-이 프로그램은 **FORECAST-SW(main.py)의 전체 코드 로직을 내부에 내장**하고
+이 프로그램은 **ForeCarb(main.py)의 전체 코드 로직을 내부에 내장**하고
 있어, 소스 폴더 없이 이 exe 하나만으로 새 수종 데이터(JSON)를 반영한 실행파일을
 만들 수 있다.
 
@@ -12,10 +12,10 @@ FORECAST-SW Equation Library Manager (self-contained).
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 [① exe 재빌드 — 자체 완결]  통합 species_data.json 을 입력받아,
    내장된 소스(carbon_calculator + main.py + build_exe.py)를 임시 작업폴더로
-   풀고 그 안에 JSON 을 넣은 뒤 PyInstaller 로 새 FORECAST-SW.exe 를 빌드한다.
+   풀고 그 안에 JSON 을 넣은 뒤 PyInstaller 로 새 ForeCarb.exe 를 빌드한다.
    → 소스 트리를 옆에 둘 필요 없음. (단, PC 에 Python 3.10+ 이 있어야 컴파일 가능)
 
-[② JSON 적용 — Python 불필요]  기존 FORECAST-SW.exe 옆에 JSON 을 복사만 한다.
+[② JSON 적용 — Python 불필요]  기존 ForeCarb.exe 옆에 JSON 을 복사만 한다.
    다음 실행 시 자동 반영. 재빌드가 필요 없을 때 가장 빠른 경로.
 
 JSON 양식:  species_data.json (통합본 — 교목·관목·국내·국외 4개 섹션)
@@ -45,6 +45,7 @@ from PyQt5.QtWidgets import (
 )
 
 from carbon_calculator.equation_eval import evaluate as _safe_equation_evaluate
+from carbon_calculator.qt_locale import apply_dialog_font, install_qt_translator
 from carbon_calculator.species_names_en import ENVIRONMENT_EN as _ENVIRONMENT_EN
 from carbon_calculator.version import __version__
 from carbon_calculator.typography import (
@@ -52,7 +53,7 @@ from carbon_calculator.typography import (
 )
 
 # ── 표시 언어 ────────────────────────────────────────────────────────────
-# 이 앱은 표시문자열에 자체 대응표를 사용한다. 수식 검증은 FORECAST-SW와 같은
+# 이 앱은 표시문자열에 자체 대응표를 사용한다. 수식 검증은 ForeCarb와 같은
 # 허용목록 기반 평가기를 공유한다. 언어 설정은 같은 QSettings 키를 공유해
 # 두 앱의 표시 언어가 함께 움직인다. 기존 설치의 설정 호환성을 위해 키는 유지한다.
 _SETTINGS_ORG = "SejongArboretum"
@@ -64,8 +65,8 @@ _EN: dict[str, str] = {
     "사용할 EXE 파일 이름을 입력하세요.": "Enter the output EXE file name.",
     "파일 이름에는 경로 또는 특수문자를 사용할 수 없습니다.": "The file name cannot contain a path or invalid characters.",
     "사용할 수 없는 파일 이름입니다.": "This file name is not allowed.",
-    "수종 데이터 업데이터 (자체 완결형) - FORECAST-SW v{version}":
-        "FORECAST-SW Equation Library Manager (self-contained, v{version})",
+    "수종 데이터 업데이터 (자체 완결형) - ForeCarb v{version}":
+        "ForeCarb Equation Library Manager (self-contained, v{version})",
     "수종 데이터 JSON (통합 species_data.json)":
         "Species data JSON (combined species_data.json)",
     "— 파일을 선택하면 검증됩니다": "— select a file to validate it",
@@ -74,8 +75,8 @@ _EN: dict[str, str] = {
     "폴더...": "Folder...",
     "파일/폴더 경로를 선택하거나 직접 입력하세요":
         "Choose a file or folder, or type a path",
-    "① exe 재빌드   —   내장 소스로 새 FORECAST-SW.exe 생성 (권장)":
-        "① Rebuild Assessment Application — build a new FORECAST-SW executable from the bundled "
+    "① exe 재빌드   —   내장 소스로 새 ForeCarb.exe 생성 (권장)":
+        "① Rebuild Assessment Application — build a new ForeCarb executable from the bundled "
         "sources (recommended)",
     "출력 폴더 (exe 저장 위치)": "Output folder (where the executable is written)",
     "새 exe 빌드 (PyInstaller)": "Build new executable (PyInstaller)",
@@ -102,19 +103,19 @@ _EN: dict[str, str] = {
     "출력 폴더를 지정하세요.": "Specify an output folder.",
     "② JSON 적용   —   기존 exe 옆에 복사만 (Python 불필요)":
         "② Apply JSON — deploy it to an existing Assessment Application (no Python required)",
-    "FORECAST-SW.exe 위치": "Location of the FORECAST-SW Assessment Application",
+    "ForeCarb.exe 위치": "Location of the ForeCarb Assessment Application",
     "찾기...": "Browse...",
     "JSON 적용 (복사)": "Apply JSON (copy)",
     "완료 — JSON 복사됨": "Done — JSON copied",
     "JSON 검증에 실패했습니다 (상단 상태 확인).":
         "JSON validation failed (see the status above).",
-    "FORECAST-SW.exe 위치를 선택하세요.":
-        "Select the location of the FORECAST-SW Assessment Application.",
+    "ForeCarb.exe 위치를 선택하세요.":
+        "Select the location of the ForeCarb Assessment Application.",
     "로그": "Log",
     "통합 species_data.json 선택": "Select the combined species_data.json",
     "JSON 파일 (*.json)": "JSON file (*.json)",
     "출력 폴더 선택": "Select output folder",
-    "FORECAST-SW.exe 선택": "Select the FORECAST-SW Assessment Application",
+    "ForeCarb.exe 선택": "Select the ForeCarb Assessment Application",
     "실행 파일 (*.exe)": "Executable (*.exe)",
     # 검증 결과
     "JSON 파싱 오류: {error}": "JSON parse error: {error}",
@@ -144,8 +145,8 @@ _EN: dict[str, str] = {
     "[실패] {error}": "[Failed] {error}",
     "[완료] {name} → {path}": "[Done] {name} → {path}",
     "[정리] 구버전 JSON 제거: {names}": "[Cleanup] removed legacy JSON: {names}",
-    "FORECAST-SW.exe 를 다시 실행하면 새 수종 데이터가 적용됩니다.":
-        "Restart the FORECAST-SW Assessment Application to load the new species data.",
+    "ForeCarb.exe 를 다시 실행하면 새 수종 데이터가 적용됩니다.":
+        "Restart the ForeCarb Assessment Application to load the new species data.",
     # 언어 선택
     "언어 / Language": "Language",
     "한국어": "한국어",
@@ -161,6 +162,9 @@ _EN: dict[str, str] = {
     "최소직경(cm)": "Min diameter (cm)", "최대직경(cm)": "Max diameter (cm)",
     "성장률(~10y)": "Growth rate (~10 y)", "성장률(11~20y)": "Growth rate (11–20 y)",
     "성장률(21y~)": "Growth rate (21 y~)",
+    "최소직경": "Min", "최대직경": "Max",
+    "생장량(1~10년)": "Growth rate (1–10 y)", "생장량(11~20년)": "Growth rate (11–20 y)",
+    "생장량(21~30년)": "Growth rate (21–30 y)",
     "상대생장식": "Allometric equation", "범위 최소": "Range min", "범위 최대": "Range max",
     "변수1 라벨": "Variable 1 label", "변수2 라벨": "Variable 2 label",
     "변수2 최소": "Variable 2 min", "변수2 최대": "Variable 2 max", "변수2 기본값": "Variable 2 default",
@@ -214,8 +218,9 @@ _EN: dict[str, str] = {
         "Yes = save then continue · No = continue with the file as it is on disk · Cancel = stop",
     "편집 중인 내용을 버리고 새 파일을 불러올까요?": "Discard the current edits and load the new file?",
     "화면 배율": "Zoom",
-    "수종 데이터 업데이터": "FORECAST-SW Equation Library Manager",
-    "JSON을 열고 수종·계수를 검토한 뒤 저장하여 FORECAST-SW에 적용합니다.":
+    "수종 데이터 업데이터": "ForeCarb Equation Library Manager",
+    "ForeCarb 상대생장식 라이브러리 관리": "ForeCarb Equation Library Manager",
+    "JSON을 열고 수종·계수를 검토한 뒤 저장하여 ForeCarb에 적용합니다.":
         "Open the JSON, review species and coefficients, then save and deploy it to the Assessment Application.",
     "작업 순서: 1. JSON 열기  →  2. 수종·계수 편집  →  3. 저장·검증  →  4. exe 재빌드 또는 JSON 적용":
         "Workflow: 1. Open JSON  →  2. Edit species and coefficients  →  "
@@ -350,6 +355,8 @@ def _apply_app_font(app: QApplication) -> None:
     f.setFamily(font_family(_LANG))
     f.setPointSize(scaled_point_size(BODY_PT, _UI_SCALE))
     app.setFont(f)
+    apply_dialog_font(app)
+    install_qt_translator(app, _LANG)
 
 
 def _apply_readability_theme(app: QApplication) -> None:
@@ -360,6 +367,7 @@ def _apply_readability_theme(app: QApplication) -> None:
             background: #F4F7F5;
         }}
         QLabel {{ color: #24342B; }}
+        QMessageBox QLabel {{ font-size: {_pt(BODY_PT)}pt; }}
         QLabel#pageTitle {{
             color: #195C39;
             font-size: {_pt(TITLE_PT)}pt;
@@ -511,8 +519,11 @@ JSON_NAME     = "species_data.json"
 # ── 플랫폼별 venv 레이아웃 / 실행파일 확장자 ──────────────────────────────
 _VENV_BIN     = "Scripts" if os.name == "nt" else "bin"
 _EXE_EXT      = ".exe" if os.name == "nt" else ""
-MAIN_APP_NAME = "FORECAST-SW"
+MAIN_APP_NAME = "ForeCarb"
 MAIN_EXE_NAME = f"{MAIN_APP_NAME}{_EXE_EXT}"
+# build_exe.py(APP_NAME) 가 dist/ 에 실제로 만드는 산출물 이름 — 반드시 일치해야 한다.
+_BUILT_APP_NAME = "FORECAST-SW"
+_BUILT_EXE_NAME = f"{_BUILT_APP_NAME}{_EXE_EXT}"
 
 # 작업폴더로 복사할 때 제외할 항목
 _COPY_IGNORE = shutil.ignore_patterns(
@@ -539,14 +550,15 @@ def _find_python() -> Path | None:
 
 
 def _auto_find_main_exe() -> Path | None:
-    """FORECAST-SW.exe 를 자동 탐색 (현재 폴더 / dist/)."""
-    for candidate in [
-        HERE / MAIN_EXE_NAME,
-        HERE / "dist" / MAIN_EXE_NAME,
-        HERE / "dist" / MAIN_EXE_NAME.replace(".exe", "") / MAIN_EXE_NAME,
-    ]:
-        if candidate.exists():
-            return candidate
+    """ForeCarb.exe 를 자동 탐색 (현재 폴더 / dist/)."""
+    for exe in (MAIN_EXE_NAME, _BUILT_EXE_NAME):
+        for candidate in [
+            HERE / exe,
+            HERE / "dist" / exe,
+            HERE / "dist" / Path(exe).stem / exe,
+        ]:
+            if candidate.exists():
+                return candidate
     return None
 
 
@@ -661,9 +673,9 @@ class BuildWorker(QThread):
             # ── 4) 산출물 복사 ─────────────────────────────────────────
             onedir = "--onedir" in self.options
             if onedir:
-                produced = workdir / "dist" / MAIN_APP_NAME
+                produced = workdir / "dist" / _BUILT_APP_NAME
             else:
-                produced = workdir / "dist" / MAIN_EXE_NAME
+                produced = workdir / "dist" / _BUILT_EXE_NAME
 
             if not produced.exists():
                 self.finished.emit(
@@ -681,8 +693,8 @@ class BuildWorker(QThread):
                     shutil.rmtree(dest, ignore_errors=True)
                 shutil.copytree(produced, dest)
                 final = dest / self.exe_name
-                if final.name != MAIN_EXE_NAME:
-                    (dest / MAIN_EXE_NAME).rename(final)
+                if final.name != _BUILT_EXE_NAME:
+                    (dest / _BUILT_EXE_NAME).rename(final)
             else:
                 final = self.out_dir / self.exe_name
                 shutil.copy2(produced, final)
@@ -783,8 +795,8 @@ def _env_label(env: str, data: dict | None = None) -> str:
 _MERGED_COLS = [
     ("수종명", "name"), ("학명", "sci"),
     ("a", "a"), ("b", "b"), ("CF", "cf"),
-    ("최소", "dmin"), ("최대", "dmax"),
-    ("성장률(~10y)", "g10"), ("성장률(11~20y)", "g20"), ("성장률(21y~)", "g21"),
+    ("최소직경", "dmin"), ("최대직경", "dmax"),
+    ("생장량(1~10년)", "g10"), ("생장량(11~20년)", "g20"), ("생장량(21~30년)", "g21"),
     ("상대생장식", "eq"), ("변수1 라벨", "v1"), ("변수2 라벨", "v2"),
     ("변수2 최소", "v2min"), ("변수2 최대", "v2max"), ("변수2 기본값", "v2def"),
     ("구분", "origin"),
@@ -1542,7 +1554,7 @@ class UpdaterWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(
-            tr("수종 데이터 업데이터 (자체 완결형) - FORECAST-SW v{version}")
+            tr("수종 데이터 업데이터 (자체 완결형) - ForeCarb v{version}")
             .format(version=__version__)
         )
         self.setMinimumWidth(960)
@@ -1581,7 +1593,7 @@ class UpdaterWindow(QMainWindow):
                 self.exe_row.edit.text(), self._out_user_edited, self.exe_name_edit.text())
         snap = self.editor.snapshot()
         self.setWindowTitle(
-            tr("수종 데이터 업데이터 (자체 완결형) - FORECAST-SW v{version}")
+            tr("수종 데이터 업데이터 (자체 완결형) - ForeCarb v{version}")
             .format(version=__version__)
         )
         old = self.centralWidget()
@@ -1615,9 +1627,9 @@ class UpdaterWindow(QMainWindow):
         header_row.setSpacing(_px(20))
         brand = QVBoxLayout()
         brand.setSpacing(_px(3))
-        page_title = QLabel(tr("수종 데이터 업데이터"))
+        page_title = QLabel(tr("ForeCarb 상대생장식 라이브러리 관리"))
         page_title.setObjectName("pageTitle")
-        page_subtitle = QLabel(tr("JSON을 열고 수종·계수를 검토한 뒤 저장하여 FORECAST-SW에 적용합니다."))
+        page_subtitle = QLabel(tr("JSON을 열고 수종·계수를 검토한 뒤 저장하여 ForeCarb에 적용합니다."))
         page_subtitle.setObjectName("pageSubtitle")
         page_subtitle.setWordWrap(True)
         brand.addWidget(page_title)
@@ -1657,7 +1669,7 @@ class UpdaterWindow(QMainWindow):
         # 세 경로 행의 라벨 폭을 현재 폰트로 잰 가장 긴 라벨에 맞춘다 (배율이 커져도 잘리지 않음)
         global _STATUS_INDENT
         fm = self.fontMetrics()
-        _label_texts = ("species_data.json", tr("출력 폴더 (exe 저장 위치)"), tr("FORECAST-SW.exe 위치"))
+        _label_texts = ("species_data.json", tr("출력 폴더 (exe 저장 위치)"), tr("ForeCarb.exe 위치"))
         self._label_w = max(_px(215), max(fm.horizontalAdvance(t) for t in _label_texts) + _px(16))
         _STATUS_INDENT = self._label_w + _px(8)
 
@@ -1680,7 +1692,7 @@ class UpdaterWindow(QMainWindow):
         v.addWidget(self.editor, 3)
 
         # ── ① exe 재빌드 (자체 완결) ───────────────────────────────
-        build_grp = QGroupBox(tr("① exe 재빌드   —   내장 소스로 새 FORECAST-SW.exe 생성 (권장)"))
+        build_grp = QGroupBox(tr("① exe 재빌드   —   내장 소스로 새 ForeCarb.exe 생성 (권장)"))
         build_grp.setStyleSheet("QGroupBox { font-weight: bold; }")
         bl = QVBoxLayout(build_grp)
 
@@ -1714,7 +1726,7 @@ class UpdaterWindow(QMainWindow):
         # ── ② JSON 적용 (Python 불필요) ────────────────────────────
         apply_grp = QGroupBox(tr("② JSON 적용   —   기존 exe 옆에 복사만 (Python 불필요)"))
         al = QVBoxLayout(apply_grp)
-        self.exe_row = FilePickRow(tr("FORECAST-SW.exe 위치"), tr("찾기..."), label_width=self._label_w)
+        self.exe_row = FilePickRow(tr("ForeCarb.exe 위치"), tr("찾기..."), label_width=self._label_w)
         self.exe_row.btn.clicked.connect(self._pick_exe)
         self.exe_row.edit.textChanged.connect(self._recheck_exe)
         self.exe_status = QLabel("")
@@ -1803,7 +1815,7 @@ class UpdaterWindow(QMainWindow):
 
     def _pick_exe(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, tr("FORECAST-SW.exe 선택"), str(HERE), tr("실행 파일 (*.exe)"))
+            self, tr("ForeCarb.exe 선택"), str(HERE), tr("실행 파일 (*.exe)"))
         if path:
             self.exe_row.edit.setText(path)
 
@@ -1892,7 +1904,7 @@ class UpdaterWindow(QMainWindow):
 
         exe_path = self.exe_row.path
         if not exe_path or not exe_path.exists():
-            self.apply_status.setText(tr("FORECAST-SW.exe 위치를 선택하세요."))
+            self.apply_status.setText(tr("ForeCarb.exe 위치를 선택하세요."))
             self.apply_status.setStyleSheet("color: red;")
             return
 
@@ -1917,7 +1929,7 @@ class UpdaterWindow(QMainWindow):
             self.log.appendPlainText(
                 tr("[정리] 구버전 JSON 제거: {names}").format(names=", ".join(removed)))
         self.log.appendPlainText("")
-        self.log.appendPlainText(tr("FORECAST-SW.exe 를 다시 실행하면 새 수종 데이터가 적용됩니다."))
+        self.log.appendPlainText(tr("ForeCarb.exe 를 다시 실행하면 새 수종 데이터가 적용됩니다."))
         self.apply_status.setText(tr("완료 — JSON 복사됨"))
         self.apply_status.setStyleSheet("color: green;")
 

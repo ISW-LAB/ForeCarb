@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import QApplication
 
 from .ui_scale import ui_scale
 from .i18n import get_language
+from .qt_locale import apply_dialog_font, install_qt_translator
 from .typography import BODY_PT, font_family, scaled_point_size
 
 
@@ -32,3 +33,5 @@ def setup_application_fonts(app: QApplication,
     f = QFont(font_family(get_language()))
     f.setPointSize(scaled_point_size(base_pt, scale))
     app.setFont(f)
+    apply_dialog_font(app)
+    install_qt_translator(app, get_language())

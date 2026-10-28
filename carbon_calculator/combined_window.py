@@ -29,6 +29,7 @@ from .i18n import (
     LANG_EN, LANG_KO, environment_name, get_language, save_language, set_language, tr,
 )
 from .excel_export import export_all_regions_to_excel
+from . import preset_io
 from .main_window import MainWindow as Carbon1Window
 from .main_window2 import Carbon2MainWindow
 from .plotting import MatplotlibCanvas, set_plot_font_scale
@@ -446,7 +447,7 @@ class CombinedMainWindow(QMainWindow):
         Qt가 재사용하는 기존 객체이므로 다시 채우기 전에 비운다.
         """
         self.setWindowTitle(
-            tr("FORECAST-SW - 산림복원지 탄소추정 및 시나리오 분석 소프트웨어 (Ver. {version})")
+            tr("ForeCarb - 산림복원지 탄소추정 및 시나리오 분석 소프트웨어 (Ver. {version})")
             .format(version=__version__)
         )
 
@@ -610,6 +611,104 @@ class CombinedMainWindow(QMainWindow):
             self._placeholder.deleteLater()
             self._placeholder = None
 
+    # ----- 데이터 불러오기 / 저장 (입력 양식 엑셀) -----
+
+    def _library_listing(self) -> dict:
+        """양식의 [수종목록] 시트용: (수종 키, 설명변수, 적합 직경범위)."""
+        from . import species_library as lib
+        out = {}
+        for kind in (lib.KIND_TREE, lib.KIND_SHRUB):
+            out[kind] = [(name, rec.var1_label, rec.range_text())
+                         for name, rec in lib.records_for_kind(kind, ENVIRONMENTS[0]).items()]
+        return out
+
+    def _save_data_workbook(self) -> None:
+        """열린 지역들의 입력(면적·대상지 유형·수종·직경·개체수·생존율)을 양식 엑셀로 저장.
+
+        저장한 파일은 [데이터 불러오기] 로 그대로 다시 열 수 있다. 열린 지역이 없으면
+        예시 데이터(Profile 1~3)가 든 양식을 저장한다.
+        """
+        regions = [
+            preset_io.PresetRegion(r["name"], int(r["w"]), int(r["h"]), r["env"],
+                                   r["window"].preset_rows())
+            for r in self._regions_in_tab_order()
+        ]
+        regions = [r for r in regions if r.rows]
+        path, _f = QFileDialog.getSaveFileName(
+            self, tr("데이터 저장"), tr("ForeCarb_데이터.xlsx"), tr("Excel 파일 (*.xlsx)"))
+        if not path:
+            return
+        if not path.lower().endswith(".xlsx"):
+            path += ".xlsx"
+        try:
+            preset_io.write_template(path, list(ENVIRONMENTS), self._library_listing(),
+                                     regions or None)
+        except PermissionError:
+            QMessageBox.warning(self, tr("저장 실패"),
+                                tr("파일이 다른 프로그램(Excel 등)에서 열려 있어 저장할 수 없습니다.\n"
+                                   "해당 파일을 닫고 다시 시도해 주세요."))
+            return
+        if regions:
+            message = tr("{n}개 지역의 입력 데이터를 저장했습니다:\n{path}").format(n=len(regions), path=path)
+        else:
+            message = tr("입력된 지역이 없어 예시 데이터(Profile 1~3)가 든 양식을 저장했습니다:\n{path}").format(path=path)
+        QMessageBox.information(self, tr("저장 완료"), message)
+
+    def _load_preset_workbook(self) -> None:
+        """양식 엑셀의 지역마다 탭을 만들고 수종 입력을 채운 뒤 계산한다."""
+        from . import species_library as lib
+        path, _f = QFileDialog.getOpenFileName(
+            self, tr("데이터 불러오기"), "", tr("Excel 파일 (*.xlsx)"))
+        if not path:
+            return
+        tree_names = list(lib.records_for_kind(lib.KIND_TREE, ENVIRONMENTS[0]).keys())
+        shrub_names = list(lib.records_for_kind(lib.KIND_SHRUB, ENVIRONMENTS[0]).keys())
+        try:
+            result = preset_io.read_preset(path, tree_names, shrub_names, ENVIRONMENTS)
+        except Exception as exc:  # noqa: BLE001 — 형식 오류 안내
+            QMessageBox.warning(self, tr("데이터 불러오기 실패"), str(exc))
+            return
+        if not result.regions:
+            QMessageBox.warning(self, tr("데이터 불러오기 실패"),
+                                "\n".join(result.errors[:20]) or tr("불러올 수종 입력이 없습니다."))
+            return
+
+        existing = {r["name"] for r in self._regions}
+        clash = [r.name for r in result.regions if r.name in existing]
+        replace = False
+        if clash:
+            answer = QMessageBox.question(
+                self, tr("같은 이름의 지역"),
+                tr("이미 있는 지역: {names}\n\n예 = 기존 탭을 닫고 새로 만들기 · 아니요 = 이름 뒤에 번호를 붙여 추가")
+                .format(names=", ".join(clash)),
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel, QMessageBox.No)
+            if answer == QMessageBox.Cancel:
+                return
+            replace = answer == QMessageBox.Yes
+        if replace:
+            for region in [r for r in self._regions if r["name"] in clash]:
+                self._tabs.removeTab(self._tabs.indexOf(region["container"]))
+                self._regions.remove(region)
+                self._dispose_region(region)
+            existing -= set(clash)
+
+        created = []
+        for preset in result.regions:
+            name, n = preset.name, 2
+            while name in existing:
+                name, n = f"{preset.name} ({n})", n + 1
+            existing.add(name)
+            self._create_region(name, preset.width_m, preset.height_m, preset.environment or ENVIRONMENTS[0])
+            window = self._regions[-1]["window"]
+            window.apply_preset_rows(preset.rows)
+            window.on_calculate()
+            created.append(f"{name} ({len(preset.rows)})")
+        self._status_label.setText(
+            tr("{n}개 지역 데이터를 불러와 계산했습니다: {names}").format(n=len(created), names=", ".join(created)))
+        notes = list(result.errors) + list(result.notes)
+        if notes:
+            QMessageBox.information(self, tr("데이터 불러오기 — 확인 사항"), "\n".join(notes[:25]))
+
     # ----- 지역 종합 분석 -----
 
     def _regions_in_tab_order(self) -> List[dict]:
@@ -720,7 +819,7 @@ class CombinedMainWindow(QMainWindow):
         QMessageBox.information(
             self, tr("저장 완료"),
             tr("통합 분석 결과가 저장되었습니다:\n{path}\n\n"
-               "포함된 시트: 지역별_추정치 · 탄소_기여도 · 지역_비교분석 · 그래프")
+               "포함된 시트: 지역별_추정치 · 탄소_기여도 · 생존률_반영 · 지역_비교분석 · 그래프")
             .format(path=path),
         )
 
@@ -730,6 +829,15 @@ class CombinedMainWindow(QMainWindow):
         menubar = self.menuBar()
 
         file_menu = menubar.addMenu(tr("파일(&F)"))
+        preset_action = QAction(tr("데이터 불러오기(&O)"), self)
+        preset_action.setShortcut("Ctrl+O")
+        preset_action.triggered.connect(self._load_preset_workbook)
+        file_menu.addAction(preset_action)
+        template_action = QAction(tr("데이터 저장(&S)"), self)
+        template_action.setShortcut("Ctrl+S")
+        template_action.triggered.connect(self._save_data_workbook)
+        file_menu.addAction(template_action)
+        file_menu.addSeparator()
         export_action = QAction(tr("통합 Excel 저장(&E)"), self)
         export_action.setShortcut("Ctrl+E")
         export_action.triggered.connect(self._export_all_regions_excel)
@@ -815,19 +923,19 @@ class CombinedMainWindow(QMainWindow):
         bar = self.statusBar()
         if getattr(self, "_status_label", None) is not None:
             self._status_label.setText(tr("‘+ 지역 추가’로 지역을 추가하세요."))
-            self._version_label.setText(tr("FORECAST-SW v{version}").format(version=__version__))
+            self._version_label.setText(tr("ForeCarb v{version}").format(version=__version__))
             return
         self._status_label = QLabel(tr("‘+ 지역 추가’로 지역을 추가하세요."))
         bar.addWidget(self._status_label, 1)
-        self._version_label = QLabel(tr("FORECAST-SW v{version}").format(version=__version__))
+        self._version_label = QLabel(tr("ForeCarb v{version}").format(version=__version__))
         self._version_label.setStyleSheet("color: #777;")
         bar.addPermanentWidget(self._version_label)
 
     def _show_about(self) -> None:
         QMessageBox.about(
             self,
-            tr("FORECAST-SW"),
-            tr("<b>FORECAST-SW (통합 Ver. {version})</b><br><br>").format(version=__version__)
+            tr("ForeCarb"),
+            tr("<b>ForeCarb (통합 Ver. {version})</b><br><br>").format(version=__version__)
             + tr("지역(권역)별로 탭을 동적으로 추가해 각 지역의 "
                  "<b>탄소저장량 추정 + 수종별 기여도</b>를 독립적으로 다룹니다.<br>")
             + tr("&nbsp;&nbsp;· [+ 지역 추가] — 지역명/면적/대상지 유형 입력 → 지역 탭 생성<br>")

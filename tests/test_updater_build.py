@@ -11,7 +11,7 @@ import updater_app as updater
 class UpdaterBuildTests(unittest.TestCase):
     def test_executable_names(self):
         for value, expected in (
-            ("FORECAST-SW.exe", "FORECAST-SW.exe"),
+            ("ForeCarb.exe", "ForeCarb.exe"),
             ("세종 수목원", "세종 수목원.exe"),
             (" custom.EXE ", "custom.exe"),
             ("release.v2", "release.v2.exe"),
@@ -38,9 +38,9 @@ class UpdaterBuildTests(unittest.TestCase):
                     work = Path(kwargs["cwd"])
                     target = work / "dist"
                     if onedir:
-                        target /= updater.MAIN_APP_NAME
+                        target /= updater._BUILT_APP_NAME
                     target.mkdir(parents=True)
-                    (target / updater.MAIN_EXE_NAME).write_bytes(b"test executable")
+                    (target / updater._BUILT_EXE_NAME).write_bytes(b"test executable")
                     if onedir:
                         (target / "_internal").mkdir()
                         (target / "_internal" / "data.txt").write_text("dependency")
@@ -58,6 +58,6 @@ class UpdaterBuildTests(unittest.TestCase):
                 final = target_dir / "세종 계산기.exe"
                 self.assertEqual(results, [(True, str(final))])
                 self.assertEqual(final.read_bytes(), b"test executable")
-                self.assertFalse((target_dir / updater.MAIN_EXE_NAME).exists())
+                self.assertFalse((target_dir / updater._BUILT_EXE_NAME).exists())
                 if onedir:
                     self.assertEqual((target_dir / "_internal" / "data.txt").read_text(), "dependency")

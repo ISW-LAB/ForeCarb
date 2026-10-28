@@ -81,10 +81,18 @@ class SharedYearUiTests(unittest.TestCase):
         with patch.object(vis, "QtInteractor", Plotter), patch.object(vis, "VegetationRenderer"):
             w = MainWindow(region_name="test", area_w=30, area_h=30)
             try:
-                self.assertEqual(w._graph_tabs.count(), 9)
+                from carbon_calculator.i18n import tr
+                # 교목·관목 × (연도별 · 생존률 반영 · 직경별) + 시각화 = 7 페이지, 버튼 한 줄로 선택
+                self.assertEqual(w._graph_tabs.count(), 7)
+                self.assertEqual([b.text() for b in w._view_buttons.values()],
+                                 [tr("연도별"), tr("생존률 반영"), tr("직경별")])
+                w._kind_buttons["shrub"].click()
+                w._view_buttons["survival"].click()
+                self.assertEqual(w._graph_tabs.currentIndex(), w._graph_pages[("shrub", "survival")])
+                w._graph_tabs.setCurrentIndex(w._graph_pages[("tree", "year")])
+                self.assertTrue(w._kind_buttons["tree"].isChecked() and w._view_buttons["year"].isChecked())
                 self.assertIs(w.visualization_tab.year_slider, w.year_slider)
                 self.assertFalse(w.visualization_tab.isAncestorOf(w.year_slider))
-                from carbon_calculator.i18n import tr
                 w._set_top_carbon_display(1000.0, 500.0, 1500.0)
                 self.assertEqual(w.economic_value_button.text(), tr("경제가치: {value:,.0f}원").format(value=45000))
                 with patch("carbon_calculator.main_window.QInputDialog.getDouble", return_value=(40000.0, True)):
@@ -118,7 +126,9 @@ class SharedYearUiTests(unittest.TestCase):
                 payload = w._payload_for("tree", sum(e.carbon_kg for e in w._tree_entries))
                 self.assertEqual(len(payload["projection"]["years"]), 31)
                 self.assertEqual(len(payload["projection"]["series"]), 2)
-                w._graph_tabs.setCurrentIndex(8)
+                # 기본 생존율(100 %)이면 게이지의 생존 반영 값은 전량 생존 값과 같다.
+                self.assertAlmostEqual(w.total_gauge.secondaryValue(), w.total_gauge.value(), places=6)
+                w._graph_tabs.setCurrentIndex(w._graph_tabs.indexOf(w.visualization_tab))
                 w.year_slider.setValue(29)
                 w.visualization_tab.play()
                 w.visualization_tab._advance_year()

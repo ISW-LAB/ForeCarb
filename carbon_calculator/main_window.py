@@ -15,18 +15,20 @@ from __future__ import annotations
 
 import datetime
 import io
+import math
 import random
 import re
 from dataclasses import dataclass, replace
 from typing import List, Optional, Tuple
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
     QFileDialog, QFormLayout, QFrame, QGridLayout, QGroupBox, QHBoxLayout,
     QHeaderView, QInputDialog, QLabel, QMainWindow, QMessageBox, QPushButton, QScrollArea,
-    QSizePolicy, QSlider, QSpinBox, QSplitter, QTabWidget, QTableWidget, QTableWidgetItem,
+    QSizePolicy, QSlider, QSpinBox, QSplitter, QStackedWidget, QTabWidget, QTableWidget,
+    QTableWidgetItem, QToolButton, QButtonGroup,
     QVBoxLayout, QWidget,
 )
 
@@ -43,16 +45,19 @@ from .input_limits import (
 )
 from .version import __version__
 from .data import (
-    DEFAULT_ENVIRONMENT, SpeciesData, shrub_species_for_env, tree_species_for_env,
+    DEFAULT_ENVIRONMENT, RESTORATION_ENVIRONMENTS, SpeciesData, shrub_species_for_env,
+    tree_species_for_env,
 )
 from .excel_export import export_carbon1_to_excel
 from .plotting import MatplotlibCanvas
 from .projections import project_record, assumption_note
+from .survival import DEFAULT_SURVIVAL_PCT, survival_factors
+from . import preset_io
 from .ui_scale import apply_dialog_size, pt, px
-from .typography import HEADING_PT, PLOT_ANNOTATION_PT, PLOT_TITLE_PT, VALUE_PT
+from .typography import HEADING_PT, PLOT_ANNOTATION_PT, PLOT_TITLE_PT, SMALL_PT, VALUE_PT
 from .widgets import (
     LinearGauge, NoWheelComboBox, NoWheelDoubleSpinBox, NoWheelSpinBox, ResultTable,
-    SearchableComboBox, align_gauge_row,
+    SearchableComboBox,
 )
 from .tree_simulation.models import VisualizationInputGroup
 from .tree_simulation.snapshot import build_snapshot, input_fingerprint
@@ -77,6 +82,11 @@ class _Entry:
     curve: object = None       # numpy 배열 (연도별)
     d_axis: object = None      # numpy 배열 (직경축 x)
     d_curve: object = None     # numpy 배열 (직경축 탄소저장량)
+    # 생존율(%) — 현재(0년차 수량에 적용)·연간(해마다 누적). 100/100 = 전량 생존.
+    survival_initial: float = DEFAULT_SURVIVAL_PCT
+    survival_annual: float = DEFAULT_SURVIVAL_PCT
+    surv_factor: object = None  # 연차별 생존 비율 S0 × s^t
+    surv_curve: object = None   # 생존률 반영 연도별 탄소저장량 (= curve × surv_factor)
 
     @property
     def supports_year_projection(self) -> bool:
@@ -90,6 +100,18 @@ OverrideCoeffs = Tuple[float, float, float]
 # 추정 그래프 x축 기준.
 BASIS_YEAR = "year"
 BASIS_DIAMETER = "diameter"
+BASIS_SURVIVAL = "survival"     # 기여도 원형그래프: 생존률 반영 값 기준
+_PIE_SUFFIX = {BASIS_YEAR: "", BASIS_DIAMETER: "_diameter", BASIS_SURVIVAL: "_survival"}
+
+# 그래프 영역 선택 버튼 (탭 두 줄 대신 한 줄).
+_SEG_BUTTON_QSS = (
+    "QToolButton#segButton { padding: 1px 12px; border: 1px solid #C4CCD3; border-radius: 5px;"
+    " background: #FFFFFF; color: #24342B; }"
+    "QToolButton#segButton:hover { background: #EEF4EF; }"
+    "QToolButton#segButton:checked { background: #2E8B57; color: #FFFFFF; border-color: #2E8B57;"
+    " font-weight: bold; }"
+    "QToolButton#segButton:disabled { color: #AAB3BA; background: #F4F6F8; }"
+)
 
 TEST_TREE_QUANTITY_RANGE = (3, 10)
 TEST_SHRUB_QUANTITY_RANGE = (3, 12)
@@ -98,6 +120,73 @@ TEST_DIAMETER_MARGIN_RATIO = 0.10
 
 def _coeffs_equal(a1: OverrideCoeffs, a2: OverrideCoeffs, tol: float = 1e-9) -> bool:
     return all(abs(x - y) <= tol for x, y in zip(a1, a2))
+
+
+# 우측 패널에서 주 디스플레이(예측 그래프·시각화 탭)가 차지할 최소 높이 비율.
+# 글꼴이 커지면 게이지·결과 표가 높이를 먼저 가져가 그래프가 찌그러지므로,
+# 창 크기 변경·스플리터 드래그 때마다 이 비율 이상을 그래프에 보장한다.
+MAIN_DISPLAY_MIN_RATIO = 0.50
+# 결과 표를 최소(머리글 + 1행)로 두면 목표 비율에 조금 못 미칠 때는 표를 남기고,
+# 그래프가 이 비율 아래로 내려가야 할 때만 표 영역을 접는다.
+MAIN_DISPLAY_FLOOR_RATIO = 0.40
+
+
+class _MainDisplayGuard(QObject):
+    """세로 스플리터의 첫 칸(그래프)이 패널 높이의 일정 비율 이상이 되도록 유지."""
+
+    def __init__(self, panel: QWidget, splitter: QSplitter, ratio: float = MAIN_DISPLAY_MIN_RATIO):
+        super().__init__(panel)
+        self._panel, self._splitter, self._ratio = panel, splitter, ratio
+        self._busy = False
+        self._auto_collapsed = False   # 이 가드가 표 영역을 접었는지 (그때만 다시 편다)
+        panel.installEventFilter(self)
+        splitter.installEventFilter(self)       # 스플리터 크기는 패널보다 늦게 확정된다
+        splitter.splitterMoved.connect(lambda *_: self.enforce())
+
+    def eventFilter(self, obj, event):  # noqa: N802 — Qt 시그니처
+        if obj in (self._panel, self._splitter) and event.type() in (QEvent.Resize, QEvent.Show):
+            QTimer.singleShot(0, self.enforce)
+        return False
+
+    def enforce(self) -> None:
+        if self._busy:
+            return
+        sizes = self._splitter.sizes()
+        total = sum(sizes)
+        if len(sizes) != 2 or total <= 0:
+            return
+        lower = self._splitter.widget(1)
+        lower_min = max(lower.minimumSizeHint().height(), lower.minimumHeight())
+        panel_h = self._panel.height()
+        wanted = int(panel_h * self._ratio)
+        if total - wanted >= lower_min:
+            best = [wanted, total - wanted]               # 목표 비율 + 나머지는 표
+        elif total - lower_min >= panel_h * MAIN_DISPLAY_FLOOR_RATIO:
+            best = [total - lower_min, lower_min]         # 표는 최소, 그래프는 최대한
+        else:
+            best = [total, 0]                             # 표 영역을 접는다
+        if sizes[1] == 0 and self._auto_collapsed and best[1] > 0:
+            new = best                                    # 자동으로 접었던 표를 공간이 생기면 다시 편다
+        elif sizes[0] < best[0]:
+            new = best
+        else:
+            return                                    # 비율 충족 (사용자가 직접 접은 표는 그대로 둔다)
+        self._busy = True
+        try:
+            self._splitter.setSizes(new)
+            self._auto_collapsed = new[1] == 0
+        finally:
+            self._busy = False
+
+
+def _survival_spin(value: float = DEFAULT_SURVIVAL_PCT) -> NoWheelDoubleSpinBox:
+    """생존율(%) 입력 — 0~100, 소수 1자리."""
+    spin = NoWheelDoubleSpinBox()
+    spin.setRange(0.0, 100.0)
+    spin.setDecimals(1)
+    spin.setSingleStep(1.0)
+    spin.setValue(float(value))
+    return spin
 
 
 # ------------------------------ 입력 다이얼로그 ------------------------------
@@ -210,6 +299,16 @@ class AddSpeciesDialog(QDialog):
         self.quantity_spin.setValue(1)
         form.addRow(tr("개수 (수량)"), self.quantity_spin)
 
+        # 생존율: 현재(0년차 수량에 적용) · 연간(해마다 누적). 기본 100 % = 전량 생존.
+        self.survival_initial_spin = _survival_spin()
+        self.survival_annual_spin = _survival_spin()
+        form.addRow(tr("현재 생존율 (%)"), self.survival_initial_spin)
+        form.addRow(tr("연간 생존율 (%/년)"), self.survival_annual_spin)
+        hint = QLabel(tr("N(t) = 수량 × 현재 생존율 × 연간 생존율^t"))
+        hint.setStyleSheet("color: #6B7780;")
+        hint.setWordWrap(True)
+        form.addRow(hint)
+
         return group
 
     def _build_right_panel(self) -> QWidget:
@@ -258,17 +357,17 @@ class AddSpeciesDialog(QDialog):
         eq_layout.addWidget(self.reset_button, alignment=Qt.AlignRight)
         v.addWidget(eq_group)
 
-        # (2) CSV 권장 정보 (읽기 전용)
-        info_group = QGroupBox(tr("(2) CSV 권장 정보 (읽기 전용)"))
+        # (2) 원자료 기준값 (읽기 전용)
+        info_group = QGroupBox(tr("(2) 원자료 기준값 (읽기 전용)"))
         info_layout = QFormLayout(info_group)
         info_layout.setSpacing(6)
 
         self.range_value_label = QLabel("-")
         self.range_value_label.setWordWrap(True)
-        info_layout.addRow(tr("유효 직경 범위"), self.range_value_label)
+        info_layout.addRow(tr("적합 직경범위"), self.range_value_label)
 
         self.growth_value_label = QLabel("-")
-        info_layout.addRow(tr("성장차 (1-10/11-20/21+ 년, cm/yr)"), self.growth_value_label)
+        info_layout.addRow(tr("연간 직경생장량\n(1~10 / 11~20 / 21~30년, cm/yr)"), self.growth_value_label)
 
         self.default_coeffs_label = QLabel("-")
         self.default_coeffs_label.setStyleSheet("color: #555;")
@@ -412,15 +511,16 @@ class AddSpeciesDialog(QDialog):
             return
         if rec.species_data is None:
             self.formula_label.setText(
-                f"{rec.formula_text()}      X = {rec.var1_label}")
+                f"{rec.formula_text()}\nX = {rec.var1_label}")
             return
         a = self.a_spin.value()
         b = self.b_spin.value()
         cf = self.cf_spin.value()
         x_term = "(10 × X)" if rec.species_data.equation_diameter_unit == "mm" else "X"
         self.formula_label.setText(
-            f"Y  =  {a:g}  ×  {x_term}^{b:g}      C  =  Y  ×  {cf:g}  ×  N"
-            f"      X = {rec.var1_label}"
+            # 두 줄로 나눠 대화상자 폭을 줄인다 (식 한 줄이 창의 최소 폭을 결정했다).
+            f"Y  =  {a:g}  ×  {x_term}^{b:g}\n"
+            f"C  =  Y  ×  {cf:g}  ×  N      (X = {rec.var1_label})"
         )
 
     def _reset_to_defaults(self) -> None:
@@ -491,6 +591,10 @@ class AddSpeciesDialog(QDialog):
         var2 = self._current_var2(rec) if rec is not None else None
         return species, diameter, quantity, override, var2
 
+    def survival_values(self) -> Tuple[float, float]:
+        """(현재 생존율 %, 연간 생존율 %)."""
+        return self.survival_initial_spin.value(), self.survival_annual_spin.value()
+
 
 # ------------------------------ 동적 입력 행 --------------------------------
 
@@ -506,6 +610,7 @@ class SpeciesInputRow(QFrame):
     def __init__(self, kind: str, species: str, diameter: float, quantity: int,
                  names: list, override_coeffs: Optional[OverrideCoeffs] = None,
                  records: Optional[dict] = None, var2: Optional[float] = None,
+                 survival: Tuple[float, float] = (DEFAULT_SURVIVAL_PCT, DEFAULT_SURVIVAL_PCT),
                  parent=None):
         super().__init__(parent)
         self.kind = kind
@@ -589,6 +694,22 @@ class SpeciesInputRow(QFrame):
         q_row.addWidget(self.quantity_spin, 1)
         outer.addLayout(q_row)
 
+        # 3-1행: 생존율 (현재 · 연간). 기본 100 % = 전량 생존.
+        s_row = QHBoxLayout()
+        s_row.setSpacing(4)
+        s_label = QLabel(tr("생존율(%)"))
+        s_label.setMinimumWidth(s_label.sizeHint().width())
+        s_label.setToolTip(tr("현재 생존율(0년차 수량에 적용) · 연간 생존율(해마다 누적)"))
+        s_row.addWidget(s_label)
+        self.survival_initial_spin = _survival_spin(survival[0])
+        self.survival_initial_spin.setToolTip(tr("현재 생존율 (%)"))
+        self.survival_annual_spin = _survival_spin(survival[1])
+        self.survival_annual_spin.setToolTip(tr("연간 생존율 (%/년)"))
+        s_row.addWidget(self.survival_initial_spin, 1)
+        s_row.addWidget(QLabel("·"))
+        s_row.addWidget(self.survival_annual_spin, 1)
+        outer.addLayout(s_row)
+
         # 4행: 오버라이드 표시 라벨 (수정된 a/b/CF 가 적용된 경우만 표시)
         self.override_label = QLabel()
         self.override_label.setStyleSheet(
@@ -659,6 +780,10 @@ class SpeciesInputRow(QFrame):
     def override_coeffs(self) -> Optional[OverrideCoeffs]:
         return self._override_coeffs
 
+    def survival_values(self) -> Tuple[float, float]:
+        """(현재 생존율 %, 연간 생존율 %)."""
+        return self.survival_initial_spin.value(), self.survival_annual_spin.value()
+
 
 # ------------------------------ 메인 윈도우 ----------------------------------
 
@@ -668,7 +793,7 @@ class MainWindow(QMainWindow):
                  region_name: str = "", area_w: int = 0, area_h: int = 0):
         super().__init__()
         self.setWindowTitle(
-            tr("FORECAST-SW (Ver. {version} - Python)").format(version=__version__)
+            tr("ForeCarb (Ver. {version} - Python)").format(version=__version__)
         )
         # 창 크기는 combined_window(통합 실행 진입점 main.py) 에서 설정.
         # centralWidget 만 사용되므로 이 창 자체의 크기는 영향 없음.
@@ -753,6 +878,13 @@ class MainWindow(QMainWindow):
         shrub_tab, self.shrub_rows_layout = self._build_input_tab("shrub", tr("+ 관목 추가"))
         tabs.addTab(shrub_tab, tr("관목"))
 
+        # 입력 데이터 엑셀(수종·직경·개체수·생존율)을 불러와 이 지역의 입력을 한 번에 채운다.
+        self.preset_button = QPushButton(tr("데이터 불러오기"))
+        self.preset_button.setCursor(Qt.PointingHandCursor)
+        self.preset_button.setToolTip(tr("양식 엑셀의 수종 목록으로 이 지역의 교목·관목 입력을 채우고 계산합니다."))
+        self.preset_button.clicked.connect(self.on_load_preset)
+        layout.addWidget(self.preset_button)
+
         # 하단 보조 버튼 행: [전체 초기화] [Excel로 저장]
         actions = QHBoxLayout()
         actions.setSpacing(6)
@@ -835,16 +967,19 @@ class MainWindow(QMainWindow):
             return
         species, diameter, quantity, override, var2 = dlg.values()
         self._append_row(kind, species, diameter, quantity,
-                         override_coeffs=override, var2=var2)
+                         override_coeffs=override, var2=var2,
+                         survival=dlg.survival_values())
 
     def _append_row(self, kind: str, species: str, diameter: float, quantity: int,
                     override_coeffs: Optional[OverrideCoeffs] = None,
-                    var2: Optional[float] = None) -> None:
+                    var2: Optional[float] = None,
+                    survival: Tuple[float, float] = (DEFAULT_SURVIVAL_PCT, DEFAULT_SURVIVAL_PCT),
+                    ) -> None:
         names = self._tree_names if kind == "tree" else self._shrub_names
         records = self._tree_records if kind == "tree" else self._shrub_records
         row = SpeciesInputRow(kind, species, diameter, quantity, names,
                               override_coeffs=override_coeffs,
-                              records=records, var2=var2)
+                              records=records, var2=var2, survival=survival)
         row.deleted.connect(self._on_row_deleted)
 
         if kind == "tree":
@@ -887,30 +1022,41 @@ class MainWindow(QMainWindow):
         self.shrub_value_label = self._make_value_field("0.00")
         self.total_value_label = self._make_value_field("0.00")
 
-        # 세 행을 하나의 격자에 담아 [제목 | 바 | 값] 열 위치를 행끼리 일치시킨다.
-        # (행마다 별도 QHBoxLayout 을 쓰면 제목 길이에 따라 바 시작 x 가 어긋난다.)
-        gauges = QGridLayout()
+        # 교목·관목·총 탄소저장량을 가로로 나란히: [제목] 아래 [바 | 값]. 세로 여백을 줄여
+        # 주 디스플레이(그래프)에 높이를 더 준다.
+        self._gauge_value_labels: dict = {}
+        self._gauge_host = QWidget()
+        gauges = QGridLayout(self._gauge_host)
         gauges.setContentsMargins(0, 0, 0, 0)
-        gauges.setHorizontalSpacing(px(10))
-        gauges.setVerticalSpacing(px(10))
-        gauges.setColumnStretch(1, 1)
-        self._add_gauge_row(gauges, 0, tr("교목 탄소저장량 (kgC)"),
-                            self.tree_gauge, self.tree_value_label)
-        self._add_gauge_row(gauges, 1, tr("관목 탄소저장량 (kgC)"),
-                            self.shrub_gauge, self.shrub_value_label)
-        self._add_gauge_row(gauges, 2, tr("총 탄소저장량 (kgC)"),
-                            self.total_gauge, self.total_value_label)
+        gauges.setHorizontalSpacing(px(6))
+        gauges.setVerticalSpacing(px(2))
+        groups = (
+            (tr("교목 탄소저장량 (kgC)"), self.tree_gauge, self.tree_value_label),
+            (tr("관목 탄소저장량 (kgC)"), self.shrub_gauge, self.shrub_value_label),
+            (tr("총 탄소저장량 (kgC)"), self.total_gauge, self.total_value_label),
+        )
+        for i, (title, gauge, value) in enumerate(groups):
+            col = 3 * i
+            self._add_gauge(gauges, col, title, gauge, value)
+            if i < len(groups) - 1:
+                gauges.setColumnMinimumWidth(col + 2, px(14))    # 그룹 사이 간격
         self.economic_value_button = QPushButton()
         self.economic_value_button.setFlat(True)
         self.economic_value_button.setCursor(Qt.PointingHandCursor)
         self.economic_value_button.setStyleSheet(
-            "QPushButton { color: #246B43; border: none; padding: 1px 4px; }"
+            "QPushButton { color: #246B43; border: none; padding: 0px 4px; }"
             "QPushButton:hover { color: #154B2D; text-decoration: underline; }"
         )
         self.economic_value_button.clicked.connect(self._edit_carbon_price)
-        gauges.addWidget(self.economic_value_button, 3, 2, Qt.AlignCenter)
         self._refresh_economic_value()
-        v.addLayout(gauges)
+        # 막대 읽는 법: 옅은 막대 = 전량 생존, 안쪽 진한 막대 = 생존률 반영.
+        legend = QLabel(tr("막대: 옅은 색 = 전량 생존 · 진한 색 = 생존률 반영"))
+        legend.setStyleSheet("color: #6B7780;")
+        legend.setToolTip(tr("생존률 반영: N(t) = 수량 × 현재 생존율 × 연간 생존율^t (수종별)"))
+        last = 3 * (len(groups) - 1)
+        gauges.addWidget(legend, 2, 0, 1, last + 1, Qt.AlignLeft | Qt.AlignVCenter)
+        gauges.addWidget(self.economic_value_button, 2, last + 1, Qt.AlignRight | Qt.AlignVCenter)
+        v.addWidget(self._gauge_host)
 
         # 그래프 영역: [교목 추정 / 교목 기여도 / 관목 추정 / 관목 기여도] sub tab.
         # 2-row 동시 배치는 그래프가 작아 보이므로, 각 그래프가 전체 영역을 차지하도록 탭 분리.
@@ -924,38 +1070,86 @@ class MainWindow(QMainWindow):
         self.shrub_pie_canvas.show_message(tr("계산 버튼을 눌러주세요"))
 
         year_row = QHBoxLayout()
-        year_row.addWidget(QLabel("Year 0"))
+        year_row.setSpacing(px(8))
+        year_row.addWidget(QLabel(tr("0년")))
         self.year_slider = QSlider(Qt.Horizontal)
         self.year_slider.setRange(0, 30)
         year_row.addWidget(self.year_slider, 1)
-        year_row.addWidget(QLabel("Year 30"))
+        year_row.addWidget(QLabel(tr("30년")))
+        year_row.addSpacing(px(16))
         self.year_label = QLabel(tr("현재: 0년"))
+        self.year_label.setStyleSheet("font-weight: bold; color: #246B43;")
         year_row.addWidget(self.year_label)
         v.addLayout(year_row)
 
-        graph_tabs = QTabWidget()
-        graph_tabs.setDocumentMode(True)
-        for kind, label in (("tree", tr("교목")), ("shrub", tr("관목"))):
+        # 그래프 영역: 버튼 한 줄 [교목][관목][시각화] · 보기 [연도별][생존률 반영][직경별]
+        # 아래에 꺾은선(왼쪽) + 기여도 원형(오른쪽). 탭 두 줄이 그래프 높이를 잡아먹지 않게 한다.
+        stack = QStackedWidget()
+        self._graph_pages: dict = {}
+        for kind in ("tree", "shrub"):
             diameter_canvas = MatplotlibCanvas(width=7, height=4)
             diameter_pie = MatplotlibCanvas(width=5, height=4)
+            survival_pie = MatplotlibCanvas(width=5, height=4)
             setattr(self, f"{kind}_diameter_canvas", diameter_canvas)
             setattr(self, f"{kind}_diameter_pie_canvas", diameter_pie)
-            for canvas in (diameter_canvas, diameter_pie):
+            setattr(self, f"{kind}_survival_pie_canvas", survival_pie)
+            for canvas in (diameter_canvas, diameter_pie, survival_pie):
                 canvas.show_message(tr("계산 버튼을 눌러주세요"))
-            graph_tabs.addTab(self._build_estimation_tab(kind), tr("{kind} 추정 (연도별)").format(kind=label))
-            graph_tabs.addTab(self._build_pie_tab(kind), tr("{kind} 기여도 (연도별)").format(kind=label))
-            graph_tabs.addTab(self._build_estimation_tab(kind, BASIS_DIAMETER), tr("{kind} 추정 (직경별)").format(kind=label))
-            graph_tabs.addTab(self._build_pie_tab(kind, BASIS_DIAMETER), tr("{kind} 기여도 (직경별)").format(kind=label))
+            for view, left, pie in (
+                ("year", self._build_estimation_tab(kind), getattr(self, f"{kind}_pie_canvas")),
+                ("survival", self._build_survival_tab(kind), survival_pie),
+                ("diameter", self._build_estimation_tab(kind, BASIS_DIAMETER), diameter_pie),
+            ):
+                stack.addWidget(self._pair_page(left, pie))
+                self._graph_pages[(kind, view)] = stack.count() - 1
         self.visualization_tab = VegetationVisualizationTab(
             snapshot_provider=self._build_visualization_snapshot,
             fingerprint_provider=self._visualization_fingerprint,
             year_slider=self.year_slider,
             parent=self,
         )
-        graph_tabs.addTab(self.visualization_tab, tr("시각화"))
-        self._graph_tabs = graph_tabs
+        stack.addWidget(self.visualization_tab)
+        self._graph_pages[("vis", None)] = stack.count() - 1
+        self._graph_tabs = stack
         self.year_slider.valueChanged.connect(self._on_visualization_year_changed)
-        graph_tabs.currentChanged.connect(self._on_result_tab_changed)
+        stack.currentChanged.connect(self._sync_graph_buttons)
+        stack.currentChanged.connect(self._on_result_tab_changed)
+
+        bar = QWidget()
+        bar.setStyleSheet(_SEG_BUTTON_QSS)
+        bar_row = QHBoxLayout(bar)
+        bar_row.setContentsMargins(0, 0, 0, 0)
+        bar_row.setSpacing(px(4))
+        self._kind_group = QButtonGroup(bar)
+        self._view_group = QButtonGroup(bar)
+        self._kind_buttons: dict = {}
+        self._view_buttons: dict = {}
+        for key, text in (("tree", tr("교목")), ("shrub", tr("관목")), ("vis", tr("시각화"))):
+            btn = self._seg_button(text)
+            self._kind_group.addButton(btn)
+            self._kind_buttons[key] = btn
+            bar_row.addWidget(btn)
+        bar_row.addSpacing(px(18))
+        view_label = QLabel(tr("보기"))
+        view_label.setStyleSheet("color: #6B7780;")
+        bar_row.addWidget(view_label)
+        for key, text in (("year", tr("연도별")), ("survival", tr("생존률 반영")),
+                          ("diameter", tr("직경별"))):
+            btn = self._seg_button(text)
+            self._view_group.addButton(btn)
+            self._view_buttons[key] = btn
+            bar_row.addWidget(btn)
+        bar_row.addStretch(1)
+        for btn in list(self._kind_buttons.values()) + list(self._view_buttons.values()):
+            btn.clicked.connect(self._select_graph_page)
+        self._sync_graph_buttons(stack.currentIndex())
+
+        graph_tabs = QWidget()          # 버튼 줄 + 페이지 (아래 스플리터의 위쪽 칸)
+        graph_col = QVBoxLayout(graph_tabs)
+        graph_col.setContentsMargins(0, 0, 0, 0)
+        graph_col.setSpacing(px(2))
+        graph_col.addWidget(bar)
+        graph_col.addWidget(stack, 1)
 
         # 결과 테이블
         tables_widget = QWidget()
@@ -967,20 +1161,43 @@ class MainWindow(QMainWindow):
         tables.addLayout(self._table_box(tr("관목 결과 (RCD·cm)"), self.shrub_table, "shrub"))
         # 표는 헤더 + 4행이 보이는 높이만 확보한다(더 보려면 스플리터를 내리면 된다).
         # 여기를 크게 잡으면 글꼴이 커진 만큼 그래프 영역을 그대로 빼앗는다.
-        tables_widget.setMinimumHeight(max(px(170), self.tree_table.fontMetrics().height() * 4 + px(30)))
+        # 주 디스플레이 비율을 지키려면 표가 줄어들 수 있어야 한다 — 최소는 머리글 + 1행
+        # (나머지는 스크롤). 그마저 비율을 깨면 _MainDisplayGuard 가 표 영역을 접는다.
+        for table in (self.tree_table, self.shrub_table):
+            one_row = int(table.fontMetrics().height() * 1.6) + px(6)
+            table.setMinimumHeight(table.horizontalHeader().sizeHint().height() + one_row
+                                   + 2 * table.frameWidth() + px(4))
 
         # 그래프(sub tab) ↔ 결과 테이블 사이 높이를 세로 드래그로 조절.
         # 그래프·시각화가 주 화면이므로 최소 높이를 따로 확보하고 배분도 더 준다.
         graph_tabs.setMinimumHeight(px(360))
         body_splitter = QSplitter(Qt.Vertical)
         body_splitter.setChildrenCollapsible(False)
+        self._tables_widget = tables_widget
         body_splitter.addWidget(graph_tabs)
         body_splitter.addWidget(tables_widget)
         body_splitter.setStretchFactor(0, 4)
         body_splitter.setStretchFactor(1, 1)
         body_splitter.setSizes([px(760), px(190)])
+        body_splitter.setCollapsible(1, True)   # 공간이 모자라면 표만 접힌다(손잡이를 끌어 다시 펼침)
         v.addWidget(body_splitter, 1)
+        self._body_splitter = body_splitter
+        self._display_guard = _MainDisplayGuard(wrap, body_splitter)
 
+        return wrap
+
+    def _build_survival_tab(self, kind: str) -> QWidget:
+        """수종별·합계의 전량 생존(실선) 대비 생존률 반영(점선) 연도별 비교."""
+        wrap = QFrame()
+        col = QVBoxLayout(wrap)
+        col.setContentsMargins(2, 2, 2, 2)
+        canvas = MatplotlibCanvas(width=7, height=4)
+        canvas.setToolTip(tr("실선: 전량 생존(기본 결과) · 점선: 생존률 반영  —  "
+                             "N(t) = 수량 × 현재 생존율 × 연간 생존율^t"))
+        canvas.show_message(tr("계산 버튼을 눌러주세요"))
+        col.addWidget(canvas, 1)
+        setattr(self, f"{kind}_survival_canvas", canvas)
+        setattr(self, f"_{kind}_survival_marker", None)
         return wrap
 
     def _build_estimation_tab(self, kind: str, basis: str = BASIS_YEAR) -> QWidget:
@@ -1010,20 +1227,54 @@ class MainWindow(QMainWindow):
         setattr(self, f"_{kind}{suffix}_total_cb", None)
         return wrap
 
-    def _build_pie_tab(self, kind: str, basis: str = BASIS_YEAR) -> QWidget:
-        suffix = "" if basis == BASIS_YEAR else "_diameter"
-        wrap = QFrame()
-        col = QVBoxLayout(wrap)
-        col.addWidget(getattr(self, f"{kind}{suffix}_pie_canvas"), 1)
-        return wrap
+    @staticmethod
+    def _pair_page(left: QWidget, pie: QWidget) -> QWidget:
+        """꺾은선(왼쪽 2/3) + 기여도 원형(오른쪽 1/3). 경계는 끌어서 조절."""
+        split = QSplitter(Qt.Horizontal)
+        split.setChildrenCollapsible(False)
+        split.addWidget(left)
+        split.addWidget(pie)
+        split.setStretchFactor(0, 2)
+        split.setStretchFactor(1, 1)
+        split.setSizes([2000, 1000])
+        return split
+
+    def _seg_button(self, text: str) -> QToolButton:
+        btn = QToolButton()
+        btn.setObjectName("segButton")
+        btn.setText(text)
+        btn.setCheckable(True)
+        btn.setCursor(Qt.PointingHandCursor)
+        f = btn.font()
+        f.setPointSize(pt(SMALL_PT))
+        btn.setFont(f)
+        return btn
+
+    def _select_graph_page(self) -> None:
+        """버튼 상태 → 페이지. 시각화를 고르면 '보기' 버튼은 쓰지 않는다."""
+        kind = next(k for k, b in self._kind_buttons.items() if b.isChecked())
+        if kind == "vis":
+            self._graph_tabs.setCurrentIndex(self._graph_pages[("vis", None)])
+            return
+        view = next((k for k, b in self._view_buttons.items() if b.isChecked()), "year")
+        self._graph_tabs.setCurrentIndex(self._graph_pages[(kind, view)])
+
+    def _sync_graph_buttons(self, index: int) -> None:
+        """페이지 → 버튼 상태 (코드에서 페이지를 바꿔도 버튼이 맞게)."""
+        kind, view = next(key for key, i in self._graph_pages.items() if i == index)
+        self._kind_buttons[kind].setChecked(True)
+        for b in self._view_buttons.values():
+            b.setEnabled(kind != "vis")
+        if view is not None:
+            self._view_buttons[view].setChecked(True)
 
     def _make_value_field(self, initial: str) -> QLabel:
         lbl = QLabel(initial)
-        lbl.setMinimumWidth(px(150))
+        lbl.setMinimumWidth(px(130))
         lbl.setAlignment(Qt.AlignCenter)
         lbl.setStyleSheet(
             "background: #FFFFFF; border: 1px solid #C4CCD3; "
-            "border-radius: 6px; padding: 6px; color: #246B43;"
+            "border-radius: 6px; padding: 2px 8px; color: #246B43;"
         )
         font = QFont()
         font.setPointSize(pt(VALUE_PT))
@@ -1031,22 +1282,23 @@ class MainWindow(QMainWindow):
         lbl.setFont(font)
         return lbl
 
-    def _add_gauge_row(self, grid: QGridLayout, row: int, title: str,
-                       gauge: LinearGauge, value_label: QLabel) -> None:
-        """격자 한 행에 [제목 | 게이지 | 값] 을 배치하고 세로 중심선을 맞춘다.
+    def _add_gauge(self, grid: QGridLayout, col: int, title: str,
+                   gauge: LinearGauge, value_label: QLabel) -> None:
+        """col 열에 [제목] (0행) 과 [바 | 값] (1행) 을 놓는다.
 
-        제목·값 라벨과 게이지 바를 같은 높이의 상단 밴드에 넣고 세 위젯을 모두
-        상단 정렬한다 → 제목 글자·바·값 상자가 같은 선에 놓이고, 눈금값은 바
-        아래에 걸린다. 제목은 오른쪽 정렬이라 바로 옆 바와 바로 이어져 읽힌다.
+        바는 값 상자와 같은 높이의 밴드 안에서 세로 중앙에 그려지므로 둘의 중심선이
+        맞고, 눈금값은 바 아래에 붙는다. 제목은 글자 높이만큼만 차지한다.
         """
         title_label = QLabel(title)
-        title_label.setMinimumWidth(px(170))
-        title_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         title_label.setStyleSheet("font-weight: bold;")
-        align_gauge_row(title_label, gauge, value_label)
-        grid.addWidget(title_label, row, 0, Qt.AlignTop)
-        grid.addWidget(gauge, row, 1, Qt.AlignTop)
-        grid.addWidget(value_label, row, 2, Qt.AlignTop)
+        band = max(px(30), value_label.sizeHint().height())
+        value_label.setFixedHeight(band)
+        gauge.set_band_height(band)
+        self._gauge_value_labels[gauge] = value_label
+        grid.addWidget(title_label, 0, col, 1, 2, Qt.AlignLeft | Qt.AlignBottom)
+        grid.addWidget(gauge, 1, col, Qt.AlignTop)
+        grid.addWidget(value_label, 1, col + 1, Qt.AlignTop)
+        grid.setColumnStretch(col, 1)
 
     def _make_result_table(self) -> QTableWidget:
         # 수종(0열)이 flex — 남는 폭을 흡수해 패널 폭에 정확히 맞춤
@@ -1090,6 +1342,7 @@ class MainWindow(QMainWindow):
             subtotal = QLabel()
             subtotal.setWordWrap(True)
             subtotal.setStyleSheet("color: #555;")
+            subtotal.setMinimumHeight(subtotal.fontMetrics().lineSpacing() + px(4))
             box.addWidget(subtotal)
             if kind == "tree":
                 self._tree_subtotal_label = subtotal
@@ -1109,13 +1362,11 @@ class MainWindow(QMainWindow):
         core_n = sum(1 for e in entries if e.record.is_core)
         ext_n = sum(1 for e in entries if e.record.is_extension)
         if not ext_n:
-            label.setText(tr("핵심 라이브러리 {n}건 · {c:,.2f} kgC")
-                          .format(n=core_n, c=core))
-            return
-        label.setText(
-            tr("핵심 {cn}건 {cc:,.2f} kgC  +  확장 {en}건 {ec:,.2f} kgC  =  {t:,.2f} kgC")
-            .format(cn=core_n, cc=core, en=ext_n, ec=ext, t=core + ext)
-        )
+            text = tr("핵심 라이브러리 {n}건 · {c:,.2f} kgC").format(n=core_n, c=core)
+        else:
+            text = (tr("핵심 {cn}건 {cc:,.2f} kgC  +  확장 {en}건 {ec:,.2f} kgC  =  {t:,.2f} kgC")
+                    .format(cn=core_n, cc=core, en=ext_n, ec=ext, t=core + ext))
+        label.setText(text)
 
     # ----- 동작 -----
 
@@ -1200,6 +1451,7 @@ class MainWindow(QMainWindow):
         self._render_pie("shrub", shrub_entries)
         self._render_pie("tree", tree_entries, BASIS_DIAMETER)
         self._render_pie("shrub", shrub_entries, BASIS_DIAMETER)
+        self._render_survival()
         self.visualization_tab.refresh_snapshot()
         self._on_visualization_year_changed(self.year_slider.value())
 
@@ -1254,9 +1506,81 @@ class MainWindow(QMainWindow):
             getattr(self, f"{kind}_diameter_canvas").show_message(tr("계산 버튼을 눌러주세요"))
             getattr(self, f"{kind}_diameter_pie_canvas").show_message(tr("계산 버튼을 눌러주세요"))
             setattr(self, f"_{kind}_year_marker", None)
+        for kind in ("tree", "shrub"):
+            getattr(self, f"{kind}_survival_canvas").show_message(tr("계산 버튼을 눌러주세요"))
+            setattr(self, f"_{kind}_survival_marker", None)
+        for kind in ("tree", "shrub"):
+            getattr(self, f"{kind}_survival_pie_canvas").show_message(tr("계산 버튼을 눌러주세요"))
+        for g in (self.tree_gauge, self.shrub_gauge, self.total_gauge):
+            g.setSecondaryValue(None)
+            self._gauge_value_labels[g].setToolTip("")
         self.year_slider.setValue(0)
         self.visualization_tab.refresh_snapshot()
         self._on_visualization_year_changed(0)
+
+    # ----- 데이터 불러오기 / 저장 -----
+
+    def apply_preset_rows(self, rows) -> None:
+        """데이터 행(preset_io.PresetRow)으로 교목·관목 입력을 바꾼다 (계산은 호출측)."""
+        self.on_clear()
+        for r in rows:
+            self._append_row(r.kind, r.species, r.diameter, r.quantity, var2=r.var2,
+                             survival=(r.survival_initial, r.survival_annual))
+        self._input_tabs.setCurrentIndex(0 if any(r.kind == "tree" for r in rows) else 1)
+
+    def preset_rows(self) -> list:
+        """현재 입력 행 → preset_io.PresetRow 목록 ([데이터 저장] 용).
+
+        사용자 정의 계수(a, b, CF)는 양식에 열이 없어 저장하지 않는다.
+        """
+        out = []
+        for kind, rows in (("tree", self.tree_rows), ("shrub", self.shrub_rows)):
+            for row in rows:
+                species, diameter, quantity = row.values()
+                s0, s1 = row.survival_values()
+                out.append(preset_io.PresetRow(kind, species, diameter, quantity, s0, s1,
+                                               row.var2_value()))
+        return out
+
+    def on_load_preset(self) -> None:
+        parent = QApplication.activeWindow() or self
+        path, _f = QFileDialog.getOpenFileName(
+            parent, tr("데이터 불러오기"), "", tr("Excel 파일 (*.xlsx)"))
+        if not path:
+            return
+        try:
+            result = preset_io.read_preset(path, self._tree_names, self._shrub_names,
+                                           RESTORATION_ENVIRONMENTS)
+        except Exception as exc:  # noqa: BLE001 — 형식 오류를 사용자에게 안내
+            QMessageBox.warning(parent, tr("데이터 불러오기 실패"), str(exc))
+            return
+        if not result.regions:
+            QMessageBox.warning(parent, tr("데이터 불러오기 실패"),
+                                "\n".join(result.errors[:20]) or tr("불러올 수종 입력이 없습니다."))
+            return
+        region = next((r for r in result.regions if r.name == self.region_name), None)
+        if region is None and len(result.regions) == 1:
+            region = result.regions[0]
+        if region is None:
+            name, ok = QInputDialog.getItem(
+                parent, tr("지역 선택"), tr("이 탭에 불러올 지역을 선택하세요:"),
+                [r.name for r in result.regions], 0, False)
+            if not ok:
+                return
+            region = next(r for r in result.regions if r.name == name)
+        if (self.tree_rows or self.shrub_rows) and QMessageBox.question(
+                parent, tr("데이터 불러오기"),
+                tr("현재 입력을 '{name}' 데이터({n}개 행)로 바꿀까요?").format(name=region.name, n=len(region.rows)),
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes) != QMessageBox.Yes:
+            return
+        self.apply_preset_rows(region.rows)
+        self.on_calculate()
+        notes = list(result.errors) + list(result.notes)
+        if (region.width_m, region.height_m) != (self.area_w, self.area_h):
+            notes.append(tr("불러온 데이터의 면적 {w} × {h} m 대신 이 탭의 면적 {aw} × {ah} m 를 사용했습니다.")
+                         .format(w=region.width_m, h=region.height_m, aw=self.area_w, ah=self.area_h))
+        if notes:
+            QMessageBox.information(parent, tr("데이터 불러오기 — 확인 사항"), "\n".join(notes[:25]))
 
     @staticmethod
     def _entry_to_row(e: _Entry) -> CarbonRow:
@@ -1340,10 +1664,12 @@ class MainWindow(QMainWindow):
                 continue
 
             total_qty += quantity
+            s0, s1 = input_row.survival_values()
             entries.append(_Entry(
                 species=species_key, record=record, species_data=species_data,
                 diameter=diameter, quantity=quantity, carbon_kg=carbon_kg,
                 unit=("m" if record.predictor_short not in ("DBH", "RCD") else unit), var2=var2,
+                survival_initial=s0, survival_annual=s1,
             ))
             total += carbon_kg
 
@@ -1353,8 +1679,12 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _gauge_ticks(maximum: float) -> list[float]:
+        """0 부터 maximum 이상까지 1·2·2.5·5 계열의 읽기 좋은 눈금 (5개 안팎 구간)."""
         maximum = max(1.0, float(maximum))
-        return [maximum * i / 5 for i in range(6)]
+        magnitude = 10.0 ** math.floor(math.log10(maximum / 5))
+        step = next(m * magnitude for m in (1, 2, 2.5, 5, 10) if m * magnitude * 5 >= maximum)
+        count = math.ceil(maximum / step - 1e-9)
+        return [step * i for i in range(count + 1)]
 
     def _set_top_carbon_display(self, tree: float, shrub: float, total: float,
                                 *, visualization_scale: bool = False) -> None:
@@ -1365,8 +1695,8 @@ class MainWindow(QMainWindow):
                 for gauge, maximum in zip(
                     (self.tree_gauge, self.shrub_gauge, self.total_gauge), maxima,
                 ):
-                    scale_max = max(1.0, maximum * 1.03)
-                    gauge.setRange(0, scale_max, self._gauge_ticks(scale_max))
+                    ticks = self._gauge_ticks(max(1.0, maximum * 1.03))
+                    gauge.setRange(0, ticks[-1], ticks)
         else:
             self.tree_gauge.setRange(0, 2000, [0, 500, 1000, 1500, 2000])
             self.shrub_gauge.setRange(0, 100, [0, 20, 40, 60, 80, 100])
@@ -1409,11 +1739,79 @@ class MainWindow(QMainWindow):
             entries = getattr(self, f"_{kind}_entries")
             totals.append(sum(float(e.curve[year]) for e in entries if e.curve is not None))
             self._render_pie(kind, entries)
+            self._render_pie(kind, entries, BASIS_SURVIVAL)
             marker = getattr(self, f"_{kind}_year_marker", None)
             if marker is not None:
                 marker.set_xdata([year, year])
                 getattr(self, f"{kind}_canvas").draw_idle()
         self._set_top_carbon_display(*totals, sum(totals), visualization_scale=True)
+        self._refresh_survival_gauges(year)
+        for kind in ("tree", "shrub"):
+            marker = getattr(self, f"_{kind}_survival_marker", None)
+            if marker is not None:
+                marker.set_xdata([year, year])
+                getattr(self, f"{kind}_survival_canvas").draw_idle()
+
+    # ----- 생존률 반영 (전량 생존 결과와 별도 표시) -----
+
+    def _survival_totals(self, year: int) -> dict:
+        """연차 year 의 교목·관목 (전량 생존 탄소, 생존 반영 탄소, 식재 수량, 생존 개체 수)."""
+        out = {}
+        for kind in ("tree", "shrub"):
+            entries = [e for e in getattr(self, f"_{kind}_entries") if e.surv_curve is not None]
+            out[kind] = (
+                sum(float(e.curve[year]) for e in entries),
+                sum(float(e.surv_curve[year]) for e in entries),
+                sum(e.quantity for e in entries),
+                sum(e.quantity * float(e.surv_factor[year]) for e in entries),
+            )
+        return out
+
+    def _all_entries(self) -> List[_Entry]:
+        return list(self._tree_entries) + list(self._shrub_entries)
+
+    def _refresh_survival_gauges(self, year: int) -> None:
+        """게이지 막대 안쪽(진한 색)에 생존률 반영 값을 그린다. 수치는 값 상자 툴팁."""
+        entries = self._all_entries()
+        if not entries or all(e.surv_curve is None for e in entries):
+            for g in (self.tree_gauge, self.shrub_gauge, self.total_gauge):
+                g.setSecondaryValue(None)
+                self._gauge_value_labels[g].setToolTip("")
+            return
+        t = self._survival_totals(year)
+        values = {
+            self.tree_gauge: (t["tree"][1], t["tree"][3], t["tree"][2]),
+            self.shrub_gauge: (t["shrub"][1], t["shrub"][3], t["shrub"][2]),
+            self.total_gauge: (t["tree"][1] + t["shrub"][1], t["tree"][3] + t["shrub"][3],
+                               t["tree"][2] + t["shrub"][2]),
+        }
+        for gauge, (carbon, n, n0) in values.items():
+            gauge.setSecondaryValue(carbon)
+            self._gauge_value_labels[gauge].setToolTip(tr("생존률 반영 ({year}년): {v:,.2f} kgC · 생존 개체 {n:,.1f} / {n0:,}주")
+                           .format(year=year, v=carbon, n=n, n0=n0))
+
+    def _render_survival(self) -> None:
+        """교목·관목 각각의 생존률 반영 탭: 수종별·합계 전량 생존(실선) / 생존률 반영(점선)."""
+        palette = ["#1F77B4", "#FF7F0E", "#2CA02C", "#9467BD", "#8C564B", "#E377C2",
+                   "#17BECF", "#BCBD22", "#7F7F7F"]
+        for kind in ("tree", "shrub"):
+            canvas = getattr(self, f"{kind}_survival_canvas")
+            setattr(self, f"_{kind}_survival_marker", None)
+            years = getattr(self, f"_{kind}_years")
+            entries = [e for e in getattr(self, f"_{kind}_entries") if e.surv_curve is not None]
+            if years is None or not entries:
+                canvas.show_message(tr("{kind} 정보 없음").format(
+                    kind=tr("교목") if kind == "tree" else tr("관목")))
+                continue
+            groups = [(species_name(e.species), palette[i % len(palette)], e.curve, e.surv_curve)
+                      for i, e in enumerate(entries)]
+            if len(entries) >= 2:
+                groups.append((tr("합계"), "#C0392B", self._sum_carbon([e.curve for e in entries]),
+                               self._sum_carbon([e.surv_curve for e in entries])))
+            canvas.plot_survival_projection(years, groups)
+            marker = canvas.ax.axvline(self.year_slider.value(), color="#C0392B", linestyle=":")
+            setattr(self, f"_{kind}_survival_marker", marker)
+            canvas.draw_idle()
 
     def _on_result_tab_changed(self, _index: int) -> None:
         if self._graph_tabs.currentWidget() is not self.visualization_tab:
@@ -1498,6 +1896,9 @@ class MainWindow(QMainWindow):
                 e.record, e.diameter, e.quantity, e.var2,
             )
             years_ref = years
+            # 생존률 반영: 탄소량은 개체 수에 비례하므로 전량 생존 곡선에 생존 비율을 곱한다.
+            e.surv_factor = survival_factors(e.survival_initial, e.survival_annual, years)
+            e.surv_curve = e.curve * e.surv_factor
 
             e.d_axis = lib.diameter_axis(e.record, e.diameter)
             e.d_curve = lib.carbon_by_diameter(e.record, e.d_axis, e.quantity, e.var2)
@@ -1652,10 +2053,15 @@ class MainWindow(QMainWindow):
 
     def _render_pie(self, kind: str, entries: List[_Entry], basis: str = BASIS_YEAR) -> None:
         """수종별 탄소저장량 기여도 파이차트를 그린다 (기여도 sub tab)."""
-        suffix = "" if basis == BASIS_YEAR else "_diameter"
-        canvas = getattr(self, f"{kind}{suffix}_pie_canvas")
+        canvas = getattr(self, f"{kind}{_PIE_SUFFIX[basis]}_pie_canvas")
         label_kr = tr("교목") if kind == "tree" else tr("관목")
-        values = [float(e.curve[self.year_slider.value()]) if basis == BASIS_YEAR and e.curve is not None else e.carbon_kg for e in entries]
+        year = self.year_slider.value()
+        if basis == BASIS_SURVIVAL:
+            values = [float(e.surv_curve[year]) if e.surv_curve is not None else e.carbon_kg for e in entries]
+        elif basis == BASIS_YEAR:
+            values = [float(e.curve[year]) if e.curve is not None else e.carbon_kg for e in entries]
+        else:
+            values = [e.carbon_kg for e in entries]
         if not entries or sum(values) <= 0:
             canvas.show_message(tr("[{kind}]\n기여도 없음").format(kind=label_kr))
             return
@@ -1785,6 +2191,8 @@ class MainWindow(QMainWindow):
                 "equation": e.record.equation,
                 "source": e.record.source,
                 "growth_assumption": assumption_note(e.record),
+                "survival_initial": e.survival_initial,
+                "survival_annual": e.survival_annual,
             }
             for i, e in enumerate(entries)
         ]
@@ -1821,7 +2229,20 @@ class MainWindow(QMainWindow):
                     "species": name, "carbon": val, "percent": val / total * 100,
                 })
 
+        survival = None
+        surv_entries = [e for e in entries if e.surv_curve is not None]
+        if years is not None and surv_entries:
+            survival = {
+                "years": [int(y) for y in years],
+                "all": [float(x) for x in self._sum_carbon([e.curve for e in surv_entries])],
+                "with_survival": [float(x) for x in self._sum_carbon([e.surv_curve for e in surv_entries])],
+                "individuals": float(sum(e.quantity for e in surv_entries)),
+                "individuals_survival": [
+                    float(x) for x in self._sum_carbon([e.quantity * e.surv_factor for e in surv_entries])],
+            }
+
         return {
             "unit": unit, "total": total, "total_qty": total_qty,
             "rows": rows, "projection": projection, "contribution": contribution,
+            "survival": survival,
         }
