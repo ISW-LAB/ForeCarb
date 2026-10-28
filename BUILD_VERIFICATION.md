@@ -16,7 +16,7 @@ have not been repeated for the shared-year UI changes.
 
 ## Checks performed
 
-1. `python -m unittest discover -s tests -v`: 55 tests passed, including the
+1. `python -m unittest discover -s tests -v`: 60 tests passed, including the
    English coverage of both UIs (the assessment app and the Equation Library
    Manager, which carries its own translation table), the
    shared-centimeter DBH/RCD contract, legacy shrub-equation equivalence,
@@ -28,8 +28,12 @@ have not been repeated for the shared-year UI changes.
    curve for every record), and
    site-category resolution (every species stores one record per category with
    no category-independent base, published per-category equations for
-   *Pinus densiflora*, and a growth factor that scales annual increments on top
-   of the selected record without moving year-0 stock).
+   *Pinus densiflora*, and nine growth factors — three site categories × growth
+   tiers 1–3, chosen by each species' tier — that scale annual increments (or the
+   2% assumed rate) on top of the selected record without moving year-0 stock,
+   with legacy six-factor files mapped to tiers 1 and 2).
+   Optional site latitude/longitude is validated and round-trips through the
+   data workbook.
    Additional checks cover graph/3D/inspection carbon parity, auxiliary-variable
    fingerprint changes, nine tabs, the shared year slider, fixed diameter
    contributions, recalculation, playback at year 30, and clearing results.

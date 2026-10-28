@@ -38,7 +38,7 @@ from pathlib import Path
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
-    QAbstractItemView, QSizePolicy, QApplication, QComboBox, QDialog, QDialogButtonBox,
+    QAbstractItemView, QSizePolicy, QStyledItemDelegate, QApplication, QComboBox, QDialog, QDialogButtonBox,
     QDoubleSpinBox, QFileDialog, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
     QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QTabWidget,
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
@@ -85,6 +85,14 @@ _EN: dict[str, str] = {
     "수종별 상대생장식 (대상지별 · 추가/수정/삭제)":
         "Allometric equations by site category (add / edit / delete)",
     "성장률 보정계수": "Growth factor",
+    "생장 티어": "Growth tier",
+    "티어 {n}": "Tier {n}",
+    "{where}: '{name}' 의 생장 티어는 1, 2, 3 중 하나여야 합니다":
+        "{where}: the growth tier of '{name}' must be 1, 2 or 3",
+    "각 수종의 연 직경 생장량에 그 수종 티어의 계수를 곱합니다 (1.0 = 보정 없음). "
+    "티어는 표의 '생장 티어' 열에서 수종마다 지정합니다.":
+        "Each species' annual diameter increment is multiplied by the factor of its tier "
+        "(1.0 = no correction). Set each species' tier in the 'Growth tier' column.",
     "핵심": "Core",
     "최소": "Min",
     "최대": "Max",
@@ -797,12 +805,13 @@ _MERGED_COLS = [
     ("a", "a"), ("b", "b"), ("CF", "cf"),
     ("최소직경", "dmin"), ("최대직경", "dmax"),
     ("생장량(1~10년)", "g10"), ("생장량(11~20년)", "g20"), ("생장량(21~30년)", "g21"),
+    ("생장 티어", "tier"),
     ("상대생장식", "eq"), ("변수1 라벨", "v1"), ("변수2 라벨", "v2"),
     ("변수2 최소", "v2min"), ("변수2 최대", "v2max"), ("변수2 기본값", "v2def"),
     ("구분", "origin"),
 ]
 (_COL_NAME, _COL_SCI, _COL_A, _COL_B, _COL_CF, _COL_DMIN, _COL_DMAX,
- _COL_G10, _COL_G20, _COL_G21, _COL_EQ, _COL_V1, _COL_V2, _COL_V2MIN, _COL_V2MAX,
+ _COL_G10, _COL_G20, _COL_G21, _COL_TIER, _COL_EQ, _COL_V1, _COL_V2, _COL_V2MIN, _COL_V2MAX,
  _COL_V2DEF, _COL_ORIGIN) = range(len(_MERGED_COLS))
 
 # 계수형 행이 쓰는 열 (저장 배열 순서와 같다: a, b, cf, dmin, dmax, g10, g20, g21)
@@ -869,19 +878,86 @@ def _eq_record(entry, env: str):
 
 
 
-def _growth_factor_of(data: dict | None, env: str, section: str) -> float:
-    """저장된 대상지 × 생장형 보정계수 (없으면 1.0)."""
-    table = (data or {}).get("ENVIRONMENT_GROWTH_FACTORS")
-    if not isinstance(table, dict):
-        return 1.0
-    slot = table.get(env)
-    if not isinstance(slot, dict):
-        return 1.0
+# 생장 티어 — 대상지 3종 × 티어 3단계 = 보정계수 9개. 수종마다 대상지별 티어를 갖는다.
+# carbon_calculator/data.py 의 parse_growth_settings 와 같은 규칙이어야 한다 (Manager exe 는
+# 그 모듈을 import 하지 않는다).
+_TIERS = (1, 2, 3)
+_DEFAULT_TIER = 1
+_LEGACY_SECTION_TIER = {_SECTION_TREE: 1, _SECTION_SHRUB: 2}
+
+
+_GROWTH_FACTOR_NOTE = (
+    "ENVIRONMENT_GROWTH_FACTORS[대상지][TIER_1|TIER_2|TIER_3] 는 대상지 3종 × 생장 티어 3단계 = "
+    "9개 보정계수이다. SPECIES_GROWTH_TIERS[수종][대상지] 로 지정한 티어의 계수가 그 수종의 "
+    "연 직경 생장량(생장량이 없는 확장 레코드는 가정 생장률 2%)에 추가로 곱해지며 1.0 은 보정 "
+    "없음이다. 티어 지정이 없으면 티어 1 이다. 식(a·b·CF·범위)은 바꾸지 않으므로 0년차 저장량은 "
+    "변하지 않고 30년 시나리오만 달라진다. SPECIES_GROWTH_FACTORS[수종][대상지] 가 있으면 그 값이 "
+    "우선한다.")
+
+
+def _tier_key(tier: int) -> str:
+    return "TIER_%d" % tier
+
+
+def _positive(value) -> float | None:
     try:
-        value = float(slot.get(section, 1.0))
+        value = float(value)
     except (TypeError, ValueError):
-        return 1.0
-    return value if value > 0 else 1.0
+        return None
+    return value if value > 0 else None
+
+
+def _growth_settings(data: dict | None) -> tuple[dict, dict]:
+    """JSON → ({대상지: {티어: 계수}}, {수종: {대상지: 티어}}).
+
+    구버전(대상지 × 교목/관목 6개) 파일은 교목 계수 → 티어 1, 관목 계수 → 티어 2 로
+    옮기고, 티어 지정이 없으면 관목 수종을 티어 2 에 둔다.
+    """
+    data = data or {}
+    raw = data.get("ENVIRONMENT_GROWTH_FACTORS")
+    factors: dict = {}
+    legacy_used = False
+    for env, slot in (raw.items() if isinstance(raw, dict) else ()):
+        if not isinstance(slot, dict):
+            continue
+        target = factors.setdefault(env, {t: 1.0 for t in _TIERS})
+        if any(_tier_key(t) in slot for t in _TIERS):
+            for t in _TIERS:
+                value = _positive(slot.get(_tier_key(t)))
+                if value is not None:
+                    target[t] = value
+        else:
+            for section, t in _LEGACY_SECTION_TIER.items():
+                value = _positive(slot.get(section))
+                if value is not None:
+                    target[t] = value
+                    legacy_used = legacy_used or value != 1.0
+    raw_tiers = data.get("SPECIES_GROWTH_TIERS")
+    tiers: dict = {}
+    for name, envs in (raw_tiers.items() if isinstance(raw_tiers, dict) else ()):
+        if isinstance(envs, dict):
+            tiers[name] = {e: int(t) for e, t in envs.items()
+                           if str(t).strip() in ("1", "2", "3")}
+    if legacy_used and not isinstance(raw_tiers, dict):
+        tiers = {name: {env: 2 for env in factors}
+                 for name in (data.get(_SECTION_SHRUB) or {})}
+    return factors, tiers
+
+
+class _TierDelegate(QStyledItemDelegate):
+    """'생장 티어' 열 — 1·2·3 중에서 고르는 콤보 편집기."""
+
+    def createEditor(self, parent, _option, _index):    # noqa: N802 — Qt 시그니처
+        combo = QComboBox(parent)
+        combo.addItems([str(t) for t in _TIERS])
+        return combo
+
+    def setEditorData(self, editor, index):              # noqa: N802
+        i = editor.findText(str(index.data() or _DEFAULT_TIER).strip())
+        editor.setCurrentIndex(max(0, i))
+
+    def setModelData(self, editor, model, index):        # noqa: N802
+        model.setData(index, editor.currentText())
 
 
 def _section_equation_unit(data: dict | None, section: str) -> str:
@@ -1000,6 +1076,8 @@ class SpeciesEditor(QGroupBox):
         self._dirty = False
         self._loading = False
         self._env_list: list[str] = list(_DEFAULT_ENVIRONMENTS)
+        self._tiers: dict = {}               # {수종: {대상지: 티어}} — 불러온 값
+        self._tier_delegate = _TierDelegate(self)
         self._build_ui()
 
     # ── UI ────────────────────────────────────────────────────────
@@ -1029,6 +1107,7 @@ class SpeciesEditor(QGroupBox):
         t.horizontalHeader().setStretchLastSection(True)
         t.setMinimumHeight(_px(250))
         t.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        t.setItemDelegateForColumn(_COL_TIER, self._tier_delegate)
         t.itemChanged.connect(self._on_item_changed)
         return t
 
@@ -1079,12 +1158,15 @@ class SpeciesEditor(QGroupBox):
 
         factor_row = QHBoxLayout()
         factor_row.setSpacing(8)
-        factor_row.addWidget(QLabel(tr("성장률 보정계수")))
-        for kind, section, label in (
-            (_KIND_TREE, _SECTION_TREE, tr("교목")),
-            (_KIND_SHRUB, _SECTION_SHRUB, tr("관목")),
-        ):
-            factor_row.addWidget(QLabel(label))
+        title = QLabel(tr("성장률 보정계수"))
+        hint = tr("각 수종의 연 직경 생장량에 그 수종 티어의 계수를 곱합니다 (1.0 = 보정 없음). "
+                  "티어는 표의 '생장 티어' 열에서 수종마다 지정합니다.")
+        title.setToolTip(hint)
+        factor_row.addWidget(title)
+        for tier in _TIERS:
+            label = QLabel(tr("티어 {n}").format(n=tier))
+            label.setToolTip(hint)
+            factor_row.addWidget(label)
             spin = QDoubleSpinBox()
             spin.setDecimals(3)
             spin.setSingleStep(0.05)
@@ -1092,7 +1174,8 @@ class SpeciesEditor(QGroupBox):
             spin.setValue(1.0)
             spin.setMinimumWidth(_px(96))
             spin.valueChanged.connect(lambda _v: self._on_factor_changed())
-            self.factor_spins[(env, section)] = spin
+            spin.setToolTip(hint)
+            self.factor_spins[(env, tier)] = spin
             factor_row.addWidget(spin)
         factor_row.addStretch(1)
         col.addLayout(factor_row)
@@ -1168,11 +1251,12 @@ class SpeciesEditor(QGroupBox):
             for i, env in enumerate(self._env_list):
                 if i < self.tabs.count():
                     self.tabs.setTabText(i, _env_label(env, data))
+            factors, self._tiers = _growth_settings(data)
             for env in self._env_list:
-                for section in (_SECTION_TREE, _SECTION_SHRUB):
-                    spin = self.factor_spins.get((env, section))
+                for tier in _TIERS:
+                    spin = self.factor_spins.get((env, tier))
                     if spin is not None:
-                        spin.setValue(_growth_factor_of(data, env, section))
+                        spin.setValue((factors.get(env) or {}).get(tier, 1.0))
                 for kind in (_KIND_TREE, _KIND_SHRUB):
                     self._fill_env_table(env, kind, data, sci)
         finally:
@@ -1194,7 +1278,8 @@ class SpeciesEditor(QGroupBox):
             if len(display) >= 5 and scale != 1.0:
                 display[3] = float(display[3]) / scale
                 display[4] = float(display[4]) / scale
-            self._append_core_row(t, name, sci.get(_base_name(name), ""), display)
+            self._append_core_row(t, name, sci.get(_base_name(name), ""), display,
+                                  self._tier_of(name, env))
 
         for section, origin in ((_SECTION_DOM, _ORIGIN_DOM), (_SECTION_FOR, _ORIGIN_FOR)):
             for name, entry in (data.get(section) or {}).items():
@@ -1203,21 +1288,26 @@ class SpeciesEditor(QGroupBox):
                     continue
                 if _classify_kind(name, rec.get("var1") or "DBH (cm)") != kind:
                     continue
-                self._append_eq_row(t, name, sci.get(_base_name(name), ""), rec, origin)
+                self._append_eq_row(t, name, sci.get(_base_name(name), ""), rec, origin,
+                                    self._tier_of(name, env))
         _tidy_columns(t)
 
+    def _tier_of(self, name: str, env: str) -> int:
+        tier = (self._tiers.get(name) or {}).get(env, _DEFAULT_TIER)
+        return tier if tier in _TIERS else _DEFAULT_TIER
+
     def _append_core_row(self, t: QTableWidget, name: str, sci_name: str,
-                         arr: list) -> None:
-        r = self._new_row(t, name, sci_name, _ROW_CORE, tr("핵심"))
+                         arr: list, tier: int = _DEFAULT_TIER) -> None:
+        r = self._new_row(t, name, sci_name, _ROW_CORE, tr("핵심"), tier)
         for i, col in enumerate(_COL_CORE):
             t.setItem(r, col, _mk_item(_fmt_num(arr[i] if i < len(arr) else None)))
         for col in _COL_EQ_ONLY:
             t.setItem(r, col, _mk_item("", editable=False))
 
     def _append_eq_row(self, t: QTableWidget, name: str, sci_name: str, rec: dict,
-                       origin: str) -> None:
+                       origin: str, tier: int = _DEFAULT_TIER) -> None:
         label = tr("국내") if origin == _ORIGIN_DOM else tr("국외")
-        r = self._new_row(t, name, sci_name, origin, label)
+        r = self._new_row(t, name, sci_name, origin, label, tier)
         rng = rec.get("range") or [None, None]
         v2 = rec.get("var2") or {}
         values = {
@@ -1235,7 +1325,7 @@ class SpeciesEditor(QGroupBox):
             t.setItem(r, col, _mk_item("", editable=False))
 
     def _new_row(self, t: QTableWidget, name: str, sci_name: str, row_kind: str,
-                 origin_label: str) -> int:
+                 origin_label: str, tier: int = _DEFAULT_TIER) -> int:
         r = t.rowCount()
         t.insertRow(r)
         swap = (_LANG == "en" and bool(sci_name))
@@ -1245,6 +1335,9 @@ class SpeciesEditor(QGroupBox):
         t.setItem(r, _COL_NAME, name_it)
         t.setItem(r, _COL_SCI, _mk_item(sci_name))
         t.setItem(r, _COL_ORIGIN, _mk_item(origin_label, editable=False))
+        tier_it = _mk_item(str(tier))
+        tier_it.setTextAlignment(Qt.AlignCenter)
+        t.setItem(r, _COL_TIER, tier_it)
         return r
 
     @staticmethod
@@ -1320,15 +1413,17 @@ class SpeciesEditor(QGroupBox):
             _SECTION_DOM: {}, _SECTION_FOR: {},
         }
 
+        tiers: dict = {}
         for env in self._env_list:
             for kind in (_KIND_TREE, _KIND_SHRUB):
-                self._collect_env_table(env, kind, sections, sci_map, errors)
+                self._collect_env_table(env, kind, sections, sci_map, errors, tiers)
         if errors:
             return errors, None
 
         for section, table in sections.items():
             out[section] = table
         out["ENVIRONMENT_GROWTH_FACTORS"] = self._collect_factors()
+        out["SPECIES_GROWTH_TIERS"] = tiers
 
         schema = dict(out.get("_schema") or {})
         schema["assessment_diameter_unit"] = "cm"
@@ -1337,6 +1432,7 @@ class SpeciesEditor(QGroupBox):
         schema["SHRUB_SPECIES_equation_diameter_unit"] = _section_equation_unit(
             self._data, _SECTION_SHRUB)
         schema["growth_diameter_unit"] = "cm/year"
+        schema["growth_factor_note"] = _GROWTH_FACTOR_NOTE
         out["_schema"] = schema
 
         old_sci = dict(self._data.get("SPECIES_EN") or {})
@@ -1347,7 +1443,7 @@ class SpeciesEditor(QGroupBox):
 
         ordered = {}
         for k in ("_schema", "ENVIRONMENTS", "ENVIRONMENTS_EN", "SPECIES_EN",
-                  "ENVIRONMENT_GROWTH_FACTORS", "SPECIES_GROWTH_FACTORS",
+                  "ENVIRONMENT_GROWTH_FACTORS", "SPECIES_GROWTH_TIERS", "SPECIES_GROWTH_FACTORS",
                   _SECTION_TREE, _SECTION_SHRUB, _SECTION_DOM, _SECTION_FOR):
             if k in out:
                 ordered[k] = out[k]
@@ -1359,14 +1455,14 @@ class SpeciesEditor(QGroupBox):
         result: dict = {}
         for env in self._env_list:
             slot = {}
-            for section in (_SECTION_TREE, _SECTION_SHRUB):
-                spin = self.factor_spins.get((env, section))
-                slot[section] = _num_out(spin.value() if spin is not None else 1.0)
+            for tier in _TIERS:
+                spin = self.factor_spins.get((env, tier))
+                slot[_tier_key(tier)] = _num_out(spin.value() if spin is not None else 1.0)
             result[env] = slot
         return result
 
     def _collect_env_table(self, env: str, kind: str, sections: dict,
-                           sci_map: dict, errors: list) -> None:
+                           sci_map: dict, errors: list, tiers: dict) -> None:
         t = self.env_tables[(env, kind)]
         core_section = _SECTION_TREE if kind == _KIND_TREE else _SECTION_SHRUB
         storage_scale = _display_scale(self._data, core_section)
@@ -1384,6 +1480,13 @@ class SpeciesEditor(QGroupBox):
                               .format(where=where, name=name))
                 continue
             seen.add(name)
+
+            tier_text = (t.item(r, _COL_TIER).text() if t.item(r, _COL_TIER) else "").strip()
+            if tier_text not in ("1", "2", "3"):
+                errors.append(tr("{where}: '{name}' 의 생장 티어는 1, 2, 3 중 하나여야 합니다")
+                              .format(where=where, name=name))
+                continue
+            tiers.setdefault(name, {})[env] = int(tier_text)
 
             row_kind = self._row_kind(t, r)
             sci_text = t.item(r, _COL_SCI).text() if t.item(r, _COL_SCI) else ""
@@ -1502,8 +1605,8 @@ class SpeciesEditor(QGroupBox):
                 cells[_COL_NAME] = _get_true_name(t.item(r, _COL_NAME))
                 cells_all.append([self._row_kind(t, r)] + cells)
             rows["%s\x00%s" % (env, kind)] = cells_all
-        factors = {"%s\x00%s" % (env, sec): spin.value()
-                   for (env, sec), spin in self.factor_spins.items()}
+        factors = {"%s\x00%s" % (env, tier): spin.value()
+                   for (env, tier), spin in self.factor_spins.items()}
         return {"data": self._data, "dirty": self._dirty, "rows": rows,
                 "factors": factors, "tab": self.tabs.currentIndex()}
 
@@ -1511,8 +1614,8 @@ class SpeciesEditor(QGroupBox):
         self._loading = True
         try:
             self._data = snap.get("data")
-            for (env, sec), spin in self.factor_spins.items():
-                value = (snap.get("factors") or {}).get("%s\x00%s" % (env, sec))
+            for (env, tier), spin in self.factor_spins.items():
+                value = (snap.get("factors") or {}).get("%s\x00%s" % (env, tier))
                 if value:
                     spin.setValue(float(value))
             for (env, kind), t in self.env_tables.items():
@@ -1525,7 +1628,7 @@ class SpeciesEditor(QGroupBox):
                     sci_name = cells[_COL_SCI] if len(cells) > _COL_SCI else ""
                     swap = (_LANG == "en" and bool(sci_name))
                     editable_cols = (_COL_CORE if row_kind == _ROW_CORE
-                                     else _COL_EQ_FIELDS)
+                                     else _COL_EQ_FIELDS) + (_COL_TIER,)
                     for c, text in enumerate(cells):
                         if c == _COL_NAME:
                             it = _mk_item(sci_name if swap else true_name,

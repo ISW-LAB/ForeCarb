@@ -4,7 +4,7 @@
 통합 메인 윈도우 — **지역(권역)별 동적 탭** 관리.
 
 - 상단 탭은 지역별로 동적으로 추가/삭제된다. 좌상단 [+ 지역 추가] 로 팝업을 띄워
-  지역명·면적(가로×세로 m)·대상지 유형을 입력하면
+  지역명·면적(가로×세로 m)·대상지 유형·위치(위도·경도, 선택)를 입력하면
   그 지역명을 라벨로 하는 새 탭(자생복원종 탄소저장량 추정 + 기여도 화면)이 생성된다.
 - 우상단 [지역 종합 분석] 으로 모든 지역의 총 탄소저장량을 비교하는 대시보드를 연다.
 - 국내·국외 통합 기여도(Carbon2) 모듈은 화면에 노출하지 않되 코드/인스턴스/수식은 보존한다.
@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from PyQt5.QtCore import QRect, Qt
-from PyQt5.QtGui import QFont, QFontMetrics
+from PyQt5.QtCore import QRect, Qt, QUrl
+from PyQt5.QtGui import QDesktopServices, QFont, QFontMetrics
 from PyQt5.QtWidgets import (
     QAction, QActionGroup, QApplication, QComboBox, QDialog, QDialogButtonBox,
     QFileDialog, QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
@@ -56,12 +56,15 @@ def build_region_comparison_record(region: dict) -> dict:
     metrics = calculate_site_carbon_metrics(
         inventory["tree"], inventory["shrub"], area
     )
+    location = region.get("location")
     return {
         "name": region["name"],
         "w": region["w"],
         "h": region["h"],
         "area": area,
         "env": region["env"],
+        "latitude": location[0] if location else None,
+        "longitude": location[1] if location else None,
         "tree": metrics.tree_carbon_kg,
         "shrub": metrics.shrub_carbon_kg,
         "total": metrics.total_carbon_kg,
@@ -74,17 +77,100 @@ def build_region_comparison_record(region: dict) -> dict:
     }
 
 
+# ------------------------------ 지역 위치 (위도·경도) ------------------------------
+
+def map_url(lat: float, lon: float, name: str = "") -> str:
+    """지도 서비스 주소 — 국문은 카카오맵(표식+이름), 영문은 OpenStreetMap."""
+    if get_language() == LANG_KO:
+        label = QUrl.toPercentEncoding((name or "지역").replace(",", " ")).data().decode()
+        return f"https://map.kakao.com/link/map/{label},{lat:.6f},{lon:.6f}"
+    return (f"https://www.openstreetmap.org/?mlat={lat:.6f}&mlon={lon:.6f}"
+            f"#map=15/{lat:.6f}/{lon:.6f}")
+
+
+class _LocationFields(QWidget):
+    """위도·경도 입력 한 줄 (선택 입력, 십진수 도)."""
+
+    def __init__(self, location=None, parent=None):
+        super().__init__(parent)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        # 입력 검증기는 두지 않는다 — '36.4986, 127.2896' 을 한 칸에 붙여 넣을 수 있어야
+        # 하므로, 값 검사는 [확인] 시 validate_location 으로 한다.
+        self.lat_edit = QLineEdit()
+        self.lat_edit.setPlaceholderText(tr("위도 (예: 36.4986)"))
+        self.lon_edit = QLineEdit()
+        self.lon_edit.setPlaceholderText(tr("경도 (예: 127.2896)"))
+        for edit in (self.lat_edit, self.lon_edit):
+            edit.setToolTip(tr("선택 입력 — 십진수 도(WGS84). 지도 앱에서 위치를 길게 눌러 복사한 값을 붙여 넣을 수 있습니다."))
+        self.lat_edit.textEdited.connect(self._split_pasted_pair)
+        row.addWidget(self.lat_edit, 1)
+        row.addWidget(QLabel(","))
+        row.addWidget(self.lon_edit, 1)
+        if location:
+            self.lat_edit.setText(f"{location[0]:.6f}".rstrip("0").rstrip("."))
+            self.lon_edit.setText(f"{location[1]:.6f}".rstrip("0").rstrip("."))
+
+    def _split_pasted_pair(self, text: str) -> None:
+        """'36.4986, 127.2896' 처럼 한 칸에 붙여 넣은 좌표쌍을 두 칸으로 나눈다."""
+        parts = [t for t in text.replace(",", " ").split() if t]
+        if len(parts) == 2:
+            self.lat_edit.setText(parts[0])
+            self.lon_edit.setText(parts[1])
+
+    def location(self):
+        """(위도, 경도) 또는 None. 잘못된 입력은 ValueError."""
+        return preset_io.validate_location(self.lat_edit.text(), self.lon_edit.text())
+
+
+class LocationDialog(QDialog):
+    """지역 위치(위도·경도) 입력·수정."""
+
+    def __init__(self, name: str, location=None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(tr("‘{name}’ 위치").format(name=name))
+        self.setModal(True)
+        apply_dialog_size(self, 460, 170)
+        self.fields = _LocationFields(location)
+        form = QFormLayout()
+        form.addRow(tr("위도 , 경도"), self.fields)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Ok).setText(tr("확인"))
+        buttons.button(QDialogButtonBox.Cancel).setText(tr("취소"))
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        hint = QLabel(tr("두 칸을 모두 비우면 위치 정보가 삭제됩니다."))
+        hint.setStyleSheet("color: #777;")
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(hint)
+        layout.addWidget(buttons)
+        self._location = location
+
+    def accept(self) -> None:
+        try:
+            self._location = self.fields.location()
+        except ValueError as exc:
+            QMessageBox.warning(self, tr("위치 확인"), str(exc))
+            return
+        super().accept()
+
+    def value(self):
+        return self._location
+
+
 # ------------------------------ 지역 추가 다이얼로그 ------------------------------
 
 class AddRegionDialog(QDialog):
-    """지역명 · 면적(가로×세로 m) · 대상지 유형 입력 모달."""
+    """지역명 · 면적(가로×세로 m) · 대상지 유형 · 위치(선택) 입력 모달."""
 
     def __init__(self, existing_names: List[str], parent=None):
         super().__init__(parent)
         self._existing = set(existing_names)
         self.setWindowTitle(tr("지역 추가"))
         self.setModal(True)
-        apply_dialog_size(self, 460, 320)
+        apply_dialog_size(self, 520, 360)
 
         form = QFormLayout()
         form.setSpacing(12)
@@ -109,6 +195,9 @@ class AddRegionDialog(QDialog):
         self.env_combo = QComboBox()
         self.env_combo.addItems([environment_name(e) for e in ENVIRONMENTS])
         form.addRow(tr("대상지 유형 (메타데이터)"), self.env_combo)
+
+        self.location_fields = _LocationFields()
+        form.addRow(tr("위치 (선택)"), self.location_fields)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.button(QDialogButtonBox.Ok).setText(tr("추가"))
@@ -135,15 +224,21 @@ class AddRegionDialog(QDialog):
             self.name_edit.setFocus()
             self.name_edit.selectAll()
             return
+        try:
+            self._location = self.location_fields.location()
+        except ValueError as exc:
+            QMessageBox.warning(self, tr("위치 확인"), str(exc))
+            self.location_fields.lat_edit.setFocus()
+            return
         super().accept()
 
     def values(self):
-        """(지역명, 가로 m, 세로 m, 대상지 유형) 반환."""
+        """(지역명, 가로 m, 세로 m, 대상지 유형, 위치 (위도, 경도) | None) 반환."""
         # 콤보는 표시명(영문일 수 있음)이므로 내부 키(한글 원문)로 되돌린다.
         env = ENVIRONMENTS[max(0, self.env_combo.currentIndex())]
         return (self.name_edit.text().strip(),
                 self.w_spin.value(), self.h_spin.value(),
-                env)
+                env, getattr(self, "_location", None))
 
 
 # ------------------------------ 지역 선택 다이얼로그 ------------------------------
@@ -506,21 +601,21 @@ class CombinedMainWindow(QMainWindow):
         dlg = AddRegionDialog([r["name"] for r in self._regions], self)
         if dlg.exec_() != QDialog.Accepted:
             return
-        name, w, h, env = dlg.values()
-        self._create_region(name, w, h, env)
+        name, w, h, env, location = dlg.values()
+        self._create_region(name, w, h, env, location)
 
-    def _create_region(self, name: str, w: int, h: int, env: str) -> int:
+    def _create_region(self, name: str, w: int, h: int, env: str, location=None) -> int:
         """지역 탭을 생성하고 추가한다. 추가된 탭 인덱스를 반환."""
         self._set_placeholder(False)
         # 지역의 대상지 유형·이름·면적을 Carbon1 에 전달 → Excel 자동 네이밍/요약.
         window = Carbon1Window(environment=env, region_name=name, area_w=w, area_h=h)
-        container = self._wrap_region(window, name, w, h, env)
-        idx = self._tabs.addTab(container, name)
-        self._tabs.setTabToolTip(idx, f"{name} · {w}×{h} m · {environment_name(env)}")
-        self._regions.append({
-            "name": name, "w": w, "h": h, "env": env,
-            "window": window, "container": container,
-        })
+        window.location = location
+        region = {"name": name, "w": w, "h": h, "env": env, "location": location,
+                  "window": window}
+        region["container"] = self._wrap_region(region)
+        idx = self._tabs.addTab(region["container"], name)
+        self._regions.append(region)
+        self._refresh_region_info(region)
         self._tabs.setCurrentIndex(idx)
         self._status_label.setText(
             tr("‘{name}’ 지역 추가됨 — 교목/관목 탭에서 [+ 추가] 후 [계 산]. "
@@ -528,24 +623,60 @@ class CombinedMainWindow(QMainWindow):
         )
         return idx
 
-    def _wrap_region(self, window: Carbon1Window, name: str, w: int, h: int, env: str) -> QWidget:
+    def _wrap_region(self, region: dict) -> QWidget:
         """지역 정보 배너 + Carbon1 화면을 묶은 탭 컨테이너."""
         container = QWidget()
         v = QVBoxLayout(container)
         v.setContentsMargins(6, 6, 6, 6)
         v.setSpacing(6)
-        banner = QLabel(
-            tr("📍 지역: <b>{name}</b>　|　면적: {w} × {h} m  (<b>{area}</b> ㎡)　|　"
-               "대상지 유형: <b>{env}</b>")
-            .format(name=name, w=w, h=h, area=f"{w * h:,}", env=environment_name(env))
-        )
+        banner = QLabel()
+        banner.setTextFormat(Qt.RichText)
+        banner.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
+        banner.setOpenExternalLinks(False)
+        banner.linkActivated.connect(lambda link, r=region: self._on_region_link(r, link))
         banner.setStyleSheet(
             "background: #EEF4EF; border: 1px solid #D8E3DB; border-radius: 6px; "
             "padding: 6px 10px; color: #246B43;"
         )
+        region["banner"] = banner
         v.addWidget(banner)
-        v.addWidget(window.centralWidget(), 1)
+        v.addWidget(region["window"].centralWidget(), 1)
         return container
+
+    def _refresh_region_info(self, region: dict) -> None:
+        """배너 문구와 탭 툴팁을 지역 정보(위치 포함)로 갱신한다."""
+        name, w, h, env = region["name"], region["w"], region["h"], region["env"]
+        location = region.get("location")
+        text = (tr("📍 지역: <b>{name}</b>　|　면적: {w} × {h} m  (<b>{area}</b> ㎡)　|　"
+                   "대상지 유형: <b>{env}</b>")
+                .format(name=name, w=w, h=h, area=f"{w * h:,}", env=environment_name(env)))
+        link_style = "color: #1F5FA8;"
+        if location:
+            text += (tr("　|　위치: <b>{loc}</b>").format(
+                        loc=preset_io.format_location(*location))
+                     + f' <a href="map" style="{link_style}">{tr("지도 보기")}</a>'
+                     + f' · <a href="edit" style="{link_style}">{tr("수정")}</a>')
+        else:
+            text += f'　|　<a href="edit" style="{link_style}">{tr("위치 입력")}</a>'
+        region["banner"].setText(text)
+        tip = f"{name} · {w}×{h} m · {environment_name(env)}"
+        if location:
+            tip += " · " + preset_io.format_location(*location)
+        idx = self._tabs.indexOf(region["container"])
+        if idx >= 0:
+            self._tabs.setTabToolTip(idx, tip)
+
+    def _on_region_link(self, region: dict, link: str) -> None:
+        if link == "map" and region.get("location"):
+            lat, lon = region["location"]
+            QDesktopServices.openUrl(QUrl(map_url(lat, lon, region["name"])))
+            return
+        dlg = LocationDialog(region["name"], region.get("location"), self)
+        if dlg.exec_() != QDialog.Accepted:
+            return
+        region["location"] = dlg.value()
+        region["window"].location = region["location"]
+        self._refresh_region_info(region)
 
     def _close_region(self, index: int) -> None:
         widget = self._tabs.widget(index)
@@ -630,7 +761,8 @@ class CombinedMainWindow(QMainWindow):
         """
         regions = [
             preset_io.PresetRegion(r["name"], int(r["w"]), int(r["h"]), r["env"],
-                                   r["window"].preset_rows())
+                                   r["window"].preset_rows(),
+                                   *(r.get("location") or (None, None)))
             for r in self._regions_in_tab_order()
         ]
         regions = [r for r in regions if r.rows]
@@ -698,7 +830,10 @@ class CombinedMainWindow(QMainWindow):
             while name in existing:
                 name, n = f"{preset.name} ({n})", n + 1
             existing.add(name)
-            self._create_region(name, preset.width_m, preset.height_m, preset.environment or ENVIRONMENTS[0])
+            location = ((preset.latitude, preset.longitude)
+                        if preset.latitude is not None and preset.longitude is not None else None)
+            self._create_region(name, preset.width_m, preset.height_m,
+                                preset.environment or ENVIRONMENTS[0], location)
             window = self._regions[-1]["window"]
             window.apply_preset_rows(preset.rows)
             window.on_calculate()
@@ -938,7 +1073,7 @@ class CombinedMainWindow(QMainWindow):
             tr("<b>ForeCarb (통합 Ver. {version})</b><br><br>").format(version=__version__)
             + tr("지역(권역)별로 탭을 동적으로 추가해 각 지역의 "
                  "<b>탄소저장량 추정 + 수종별 기여도</b>를 독립적으로 다룹니다.<br>")
-            + tr("&nbsp;&nbsp;· [+ 지역 추가] — 지역명/면적/대상지 유형 입력 → 지역 탭 생성<br>")
+            + tr("&nbsp;&nbsp;· [+ 지역 추가] — 지역명/면적/대상지 유형/위치(선택) 입력 → 지역 탭 생성<br>")
             + tr("&nbsp;&nbsp;· [지역 종합 분석] — 지역별 총 탄소저장량 비교 대시보드<br><br>")
             + tr("<i>국내·국외 통합 기여도 모듈은 현재 화면에서 비표시(코드·수식은 "
                  "보존).</i><br><br>")

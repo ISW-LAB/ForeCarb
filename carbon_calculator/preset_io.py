@@ -7,13 +7,14 @@
 
 양식 (시트 이름·머리글은 국문/영문 모두 인식)::
 
-    [지역]  지역명 | 가로(m) | 세로(m) | 대상지 유형
+    [지역]  지역명 | 가로(m) | 세로(m) | 대상지 유형 | 위도 | 경도
     [수종]  지역명 | 구분(교목/관목) | 수종 | 직경(cm) | 개체수
             | 현재 생존율(%) | 연간 생존율(%) | 두 번째 변수
 
 - 직경은 교목 DBH, 관목 RCD 이며 모두 cm.
 - 생존율 두 열은 비우면 100 % (전량 생존).
 - [지역] 시트가 없으면 [수종] 시트의 지역명으로 20 m × 20 m 지역을 만든다.
+- 위도·경도(십진수 도, WGS84)는 선택 입력이다. 둘 다 적어야 위치로 쓴다.
 - 수종은 국명(라이브러리 표기 그대로) 또는 학명으로 적을 수 있다.
 """
 from __future__ import annotations
@@ -42,6 +43,8 @@ _COLUMNS = {
     "width": ("가로", "가로m", "width", "widthm"),
     "height": ("세로", "세로m", "height", "heightm", "length"),
     "env": ("대상지유형", "대상지", "유형", "sitecategory", "category", "environment"),
+    "lat": ("위도", "latitude", "lat"),
+    "lon": ("경도", "longitude", "lon", "lng", "long"),
     "kind": ("구분", "생활형", "type", "kind", "growthform"),
     "species": ("수종", "수종명", "species", "speciesname"),
     "diameter": ("직경", "직경cm", "dbh/rcd", "dbhrcd", "dbh", "rcd", "diameter", "diametercm"),
@@ -75,6 +78,34 @@ class PresetRegion:
     height_m: int = DEFAULT_SIDE_M
     environment: str = ""
     rows: list[PresetRow] = field(default_factory=list)
+    latitude: float | None = None     # 십진수 도 (WGS84), 선택
+    longitude: float | None = None
+
+
+def validate_location(lat, lon) -> tuple[float, float] | None:
+    """위도·경도 쌍을 검사한다. 둘 다 비면 None, 하나만 있거나 범위 밖이면 ValueError."""
+    blank = [v is None or (isinstance(v, str) and not v.strip()) for v in (lat, lon)]
+    if all(blank):
+        return None
+    if any(blank):
+        raise ValueError(tr("위도와 경도를 함께 입력해 주세요"))
+    try:
+        lat_v, lon_v = (float(str(v).replace(",", "").strip()) if isinstance(v, str) else float(v)
+                        for v in (lat, lon))
+    except ValueError:
+        raise ValueError(tr("위도·경도는 숫자(십진수 도)로 입력해 주세요"))
+    if not (math.isfinite(lat_v) and -90 <= lat_v <= 90):
+        raise ValueError(tr("위도는 -90 ~ 90 사이여야 합니다"))
+    if not (math.isfinite(lon_v) and -180 <= lon_v <= 180):
+        raise ValueError(tr("경도는 -180 ~ 180 사이여야 합니다"))
+    return lat_v, lon_v
+
+
+def format_location(lat: float, lon: float) -> str:
+    """36.4986, 127.2896 → '36.4986°N, 127.2896°E'."""
+    ns = "N" if lat >= 0 else "S"
+    ew = "E" if lon >= 0 else "W"
+    return f"{abs(lat):.4f}°{ns}, {abs(lon):.4f}°{ew}"
 
 
 @dataclass
@@ -221,7 +252,15 @@ def read_preset(path: str, tree_names: Iterable[str], shrub_names: Iterable[str]
                     notes.append(tr("[{sheet}] {row}행: 지역명 '{name}' 이(가) 중복되어 앞의 값을 씁니다")
                                  .format(sheet=rg_ws.title, row=r_idx, name=name))
                     continue
-                regions[name] = PresetRegion(name, int(round(w)), int(round(h)), env)
+                try:
+                    location = validate_location(get("lat"), get("lon"))
+                except ValueError as exc:
+                    notes.append(tr("[{sheet}] {row}행: {error} — 위치 없이 불러옵니다")
+                                 .format(sheet=rg_ws.title, row=r_idx, error=exc))
+                    location = None
+                regions[name] = PresetRegion(name, int(round(w)), int(round(h)), env,
+                                             latitude=location[0] if location else None,
+                                             longitude=location[1] if location else None)
 
         rows = sp_ws.iter_rows(values_only=True)
         cols = _match_columns(next(rows, ()))
@@ -291,6 +330,10 @@ _HEADER_FONT = Font(bold=True, color="FFFFFF")
 _NOTE_FONT = Font(color="555555")
 
 
+# 예시 좌표 — 입력 방법을 보여 주기 위한 값(국립세종수목원 부근)이며 Profile 의 실제 위치가 아니다.
+EXAMPLE_LOCATION = (36.4986, 127.2896)
+
+
 def example_regions() -> list[PresetRegion]:
     """최종보고서 표3의 Profile 1~3 (동일 면적 400 m²) 인벤토리."""
     def rows(items):
@@ -299,7 +342,8 @@ def example_regions() -> list[PresetRegion]:
         PresetRegion("Profile 1", 20, 20, "", rows([
             (KIND_TREE, "소나무", 5.0, 30), (KIND_TREE, "졸참나무", 4.0, 20),
             (KIND_TREE, "신갈나무", 8.0, 15),
-            (KIND_SHRUB, "산철쭉", 1.2, 40), (KIND_SHRUB, "병꽃나무", 1.5, 25)])),
+            (KIND_SHRUB, "산철쭉", 1.2, 40), (KIND_SHRUB, "병꽃나무", 1.5, 25)]),
+            *EXAMPLE_LOCATION),
         PresetRegion("Profile 2", 20, 20, "", rows([
             (KIND_TREE, "소나무", 7.0, 60), (KIND_TREE, "졸참나무", 8.0, 25),
             (KIND_TREE, "신갈나무", 10.0, 15), (KIND_SHRUB, "병꽃나무", 1.5, 25)])),
@@ -331,12 +375,16 @@ def write_template(path: str, environments: list[str], library: dict[str, list[t
 
     ws = wb.active
     ws.title = tr("지역")
-    _header(ws, [tr("지역명"), tr("가로(m)"), tr("세로(m)"), tr("대상지 유형")], [16, 10, 10, 24])
+    _header(ws, [tr("지역명"), tr("가로(m)"), tr("세로(m)"), tr("대상지 유형"),
+                 tr("위도"), tr("경도")], [24, 10, 10, 24, 12, 12])
     for i, reg in enumerate(regions, start=2):
         ws.cell(i, 1, reg.name)
         ws.cell(i, 2, reg.width_m)
         ws.cell(i, 3, reg.height_m)
         ws.cell(i, 4, i18n.environment_name(reg.environment or default_env))
+        if reg.latitude is not None and reg.longitude is not None:
+            ws.cell(i, 5, reg.latitude).number_format = "0.000000"
+            ws.cell(i, 6, reg.longitude).number_format = "0.000000"
     env_names = [i18n.environment_name(e) for e in environments]
     if env_names:
         dv = DataValidation(type="list", formula1='"' + ",".join(env_names) + '"', allow_blank=True)
@@ -346,7 +394,7 @@ def write_template(path: str, environments: list[str], library: dict[str, list[t
     sp = wb.create_sheet(tr("수종"))
     _header(sp, [tr("지역명"), tr("구분"), tr("수종"), tr("직경(cm)"), tr("개체수"),
                  tr("현재 생존율(%)"), tr("연간 생존율(%)"), tr("두 번째 변수")],
-            [16, 8, 26, 10, 9, 14, 14, 13])
+            [24, 8, 26, 10, 9, 14, 14, 13])
     r = 2
     for reg in regions:
         for row in reg.rows:
@@ -381,6 +429,7 @@ def write_template(path: str, environments: list[str], library: dict[str, list[t
         tr("ForeCarb 입력 데이터 양식"),
         "",
         tr("1. [지역] 시트: 지역명, 가로·세로(m), 대상지 유형을 적습니다. 지역마다 탭이 하나씩 만들어집니다."),
+        tr("   위도·경도는 선택 입력입니다 (십진수 도, 예: 36.4986 / 127.2896). 둘 다 적으면 지역 위치로 표시됩니다."),
         tr("2. [수종] 시트: 한 줄에 한 수종(같은 직경·생존율 묶음)을 적습니다. 지역명은 [지역] 시트와 같아야 합니다."),
         tr("3. 구분은 교목 또는 관목, 수종은 [수종목록] 시트의 이름(국명 또는 학명)을 그대로 씁니다."),
         tr("4. 직경은 cm 단위입니다 (교목 DBH, 관목 RCD). 적합 직경범위 밖의 행은 계산에서 제외됩니다."),
@@ -391,6 +440,7 @@ def write_template(path: str, environments: list[str], library: dict[str, list[t
         tr("8. [파일] → [데이터 저장] 은 지금 열린 지역들의 입력을 이 양식으로 저장합니다."),
         "",
         tr("예시 데이터는 최종보고서 표3의 Profile 1~3 (400 m²) 입니다."),
+        tr("Profile 1 의 위도·경도는 입력 방법을 보여 주기 위한 예시 좌표(국립세종수목원 부근)입니다."),
     ]
     for i, text in enumerate(lines, start=1):
         cell = guide.cell(i, 1, text)

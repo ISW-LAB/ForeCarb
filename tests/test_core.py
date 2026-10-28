@@ -336,7 +336,7 @@ class SiteCategoryTests(unittest.TestCase):
     """대상지 유형이 계수·생장량에 관여하는 두 경로.
 
     ① 원 자료에 대상지별 식이 있는 수종은 그 식을 쓴다.
-    ② 그 외 수종은 기본식을 그대로 쓰고, 연 직경 생장량에만 보정계수를 곱한다.
+    ② 그 외 수종은 기본식을 그대로 쓰고, 연 직경 생장량에만 대상지 × 티어 보정계수를 곱한다.
     """
 
     def setUp(self) -> None:
@@ -348,10 +348,18 @@ class SiteCategoryTests(unittest.TestCase):
             name: dict(envs)
             for name, envs in data_module.SPECIES_GROWTH_FACTORS.items()
         }
+        self._saved_tiers = {
+            name: dict(envs)
+            for name, envs in data_module.SPECIES_GROWTH_TIERS.items()
+        }
+        data_module.ENVIRONMENT_GROWTH_FACTORS = {
+            env: dict(sections) for env, sections in self._saved_env.items()
+        }
 
     def tearDown(self) -> None:
         data_module.ENVIRONMENT_GROWTH_FACTORS = self._saved_env
         data_module.SPECIES_GROWTH_FACTORS = self._saved_species
+        data_module.SPECIES_GROWTH_TIERS = self._saved_tiers
 
     def test_published_site_equations_are_applied(self) -> None:
         """소나무는 「기초 DB 자료」 순번 1·2·3 의 대상지별 식을 그대로 쓴다."""
@@ -390,11 +398,7 @@ class SiteCategoryTests(unittest.TestCase):
         before = tree_species_for_env(category)["곰솔"]
         stock_before = calculate_carbon("곰솔", before, 12.0, 4).carbon_kg
 
-        data_module.ENVIRONMENT_GROWTH_FACTORS = {
-            env: dict(sections)
-            for env, sections in data_module.ENVIRONMENT_GROWTH_FACTORS.items()
-        }
-        data_module.ENVIRONMENT_GROWTH_FACTORS[category]["TREE_BASE"] = 1.5
+        data_module.ENVIRONMENT_GROWTH_FACTORS[category]["TIER_1"] = 1.5
         after = tree_species_for_env(category)["곰솔"]
 
         self.assertEqual((after.a, after.b, after.cf), (before.a, before.b, before.cf))
@@ -413,11 +417,7 @@ class SiteCategoryTests(unittest.TestCase):
 
     def test_species_factor_overrides_the_category_factor(self) -> None:
         category = RESTORATION_ENVIRONMENTS[2]
-        data_module.ENVIRONMENT_GROWTH_FACTORS = {
-            env: dict(sections)
-            for env, sections in data_module.ENVIRONMENT_GROWTH_FACTORS.items()
-        }
-        data_module.ENVIRONMENT_GROWTH_FACTORS[category]["TREE_BASE"] = 1.5
+        data_module.ENVIRONMENT_GROWTH_FACTORS[category]["TIER_1"] = 1.5
         data_module.SPECIES_GROWTH_FACTORS = {"곰솔": {category: 2.0}}
 
         base = tree_species_for_env(RESTORATION_ENVIRONMENTS[0])
@@ -429,11 +429,9 @@ class SiteCategoryTests(unittest.TestCase):
 
     def test_shrubs_keep_one_equation_and_only_scale_growth(self) -> None:
         category = RESTORATION_ENVIRONMENTS[1]
-        data_module.ENVIRONMENT_GROWTH_FACTORS = {
-            env: dict(sections)
-            for env, sections in data_module.ENVIRONMENT_GROWTH_FACTORS.items()
-        }
-        data_module.ENVIRONMENT_GROWTH_FACTORS[category]["SHRUB_SPECIES"] = 0.8
+        data_module.ENVIRONMENT_GROWTH_FACTORS[category]["TIER_2"] = 0.8
+        data_module.SPECIES_GROWTH_TIERS = {
+            name: {category: 2} for name in data_module.SHRUB_BASE}
         base = shrub_species_for_env(RESTORATION_ENVIRONMENTS[0])
         current = shrub_species_for_env(category)
         for name, spec in base.items():
@@ -447,10 +445,49 @@ class SiteCategoryTests(unittest.TestCase):
         """기본 상태(모든 계수 1.0)에서는 생장량이 기본값과 같아야 한다."""
         for category in RESTORATION_ENVIRONMENTS:
             with self.subTest(category=category):
-                self.assertEqual(
-                    data_module.growth_factor("곰솔", category, "TREE_BASE"), 1.0)
-                self.assertEqual(
-                    data_module.growth_factor("회양목", category, "SHRUB_SPECIES"), 1.0)
+                self.assertEqual(data_module.growth_factor("곰솔", category), 1.0)
+                self.assertEqual(data_module.growth_factor("회양목", category), 1.0)
+
+    def test_nine_factors_follow_each_species_tier(self) -> None:
+        """대상지 3 × 티어 3 = 9개 계수 — 같은 대상지라도 수종의 티어에 따라 계수가 갈린다."""
+        payload = json.loads((REPOSITORY_ROOT / "species_data.json").read_text(encoding="utf-8"))
+        factors = payload["ENVIRONMENT_GROWTH_FACTORS"]
+        self.assertEqual(sum(len(slot) for slot in factors.values()), 9)
+        self.assertEqual({k for slot in factors.values() for k in slot},
+                         {"TIER_1", "TIER_2", "TIER_3"})
+
+        category = RESTORATION_ENVIRONMENTS[0]
+        for tier, value in ((1, 1.1), (2, 1.2), (3, 1.3)):
+            data_module.ENVIRONMENT_GROWTH_FACTORS[category][f"TIER_{tier}"] = value
+        data_module.SPECIES_GROWTH_TIERS = {"곰솔": {category: 3}, "편백": {category: 2}}
+        self.assertEqual(data_module.growth_factor("곰솔", category), 1.3)
+        self.assertEqual(data_module.growth_factor("편백", category), 1.2)
+        self.assertEqual(data_module.growth_factor("졸참나무", category), 1.1)  # 지정 없음 → 티어 1
+        # 다른 대상지는 영향을 받지 않는다
+        self.assertEqual(data_module.growth_factor("곰솔", RESTORATION_ENVIRONMENTS[1]), 1.0)
+
+    def test_extension_record_assumed_rate_is_scaled_by_tier(self) -> None:
+        """생장량이 없는 확장 레코드는 가정 생장률(2%)에 티어 계수를 곱한다."""
+        from carbon_calculator import species_library as lib
+        from carbon_calculator.projections import project_record
+        category = RESTORATION_ENVIRONMENTS[0]
+        key, record = next((k, r) for k, r in lib.records_for_kind(lib.KIND_TREE, category).items()
+                           if r.is_extension and not r.is_multivar)
+        start = (record.range_min or 10.0) + 1.0
+        _y, base, _c = project_record(record, start, 1)
+        data_module.ENVIRONMENT_GROWTH_FACTORS[category]["TIER_3"] = 2.0
+        data_module.SPECIES_GROWTH_TIERS = {key: {category: 3}}
+        scaled = lib.records_for_kind(lib.KIND_TREE, category)[key]
+        _y, values, _c = project_record(scaled, start, 1)
+        self.assertAlmostEqual(base[-1], start * 1.02 ** 30)
+        self.assertAlmostEqual(values[-1], start * 1.04 ** 30)
+
+    def test_legacy_six_factor_file_maps_tree_to_tier1_and_shrub_to_tier2(self) -> None:
+        env = RESTORATION_ENVIRONMENTS[0]
+        factors, tiers = data_module.parse_growth_settings(
+            {env: {"TREE_BASE": 1.2, "SHRUB_SPECIES": 0.9}}, None, ["회양목"])
+        self.assertEqual(factors[env], {"TIER_1": 1.2, "TIER_2": 0.9, "TIER_3": 1.0})
+        self.assertEqual(tiers, {"회양목": {e: 2 for e in factors}})
 
     def test_every_species_stores_one_record_per_site_category(self) -> None:
         """대상지 공통 '기본식' 은 없다 — 네 섹션 모두 수종마다 3개 레코드를 보유한다."""

@@ -16,7 +16,7 @@ def project_record(record, starting_value, quantity, var2=None, years=PROJECTION
         for year in range(1, years + 1):
             values[year] = values[year - 1] + record.species_data.growth_at_year(year)
     else:
-        values = float(starting_value) * (1.0 + ASSUMED_ANNUAL_RATE) ** axis
+        values = float(starting_value) * (1.0 + ASSUMED_ANNUAL_RATE * record.growth_factor) ** axis
     carbon = lib.carbon_by_diameter(record, values, quantity, var2)
     if not np.all(np.isfinite(carbon)):
         raise lib.LibraryError(f"{record.key}: scenario equation is undefined within years 0–{years}")
@@ -26,4 +26,5 @@ def assumption_note(record):
     if record.species_data is not None:
         return ""
     suffix = "; H constant" if record.is_multivar else ""
-    return f"{record.key}: X(t)=X(0) × 1.02^t{suffix} (assumed)"
+    rate = 1.0 + ASSUMED_ANNUAL_RATE * record.growth_factor
+    return f"{record.key}: X(t)=X(0) × {rate:g}^t{suffix} (assumed)"

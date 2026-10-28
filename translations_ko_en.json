@@ -76,7 +76,7 @@
     "‘+ 지역 추가’ 버튼으로 지역을 추가하세요.\n\n각 지역은 독립적인 [자생복원종 탄소저장량 추정 + 기여도] 화면을 가지며,\n여러 지역을 추가한 뒤 우상단 [지역 종합 분석]으로 총 탄소저장량을 비교할 수 있습니다.": "Use the [+ Add site] button to add a site.\n\nEach site has its own screen for carbon storage projection and species contribution of native restoration species.\nAfter adding several sites, use [Multi-site comparison] at the top right to compare total carbon storage.",
     "<b>ForeCarb (통합 Ver. {version})</b><br><br>": "<b>ForeCarb (Integrated Ver. {version})</b><br><br>",
     "지역(권역)별로 탭을 동적으로 추가해 각 지역의 <b>탄소저장량 추정 + 수종별 기여도</b>를 독립적으로 다룹니다.<br>": "Sites are added as tabs, each handling its own <b>carbon storage projection and species-level contribution</b>.<br>",
-    "&nbsp;&nbsp;· [+ 지역 추가] — 지역명/면적/대상지 유형 입력 → 지역 탭 생성<br>": "&nbsp;&nbsp;· [+ Add site] — enter site name, area and site category to create a site tab<br>",
+    "&nbsp;&nbsp;· [+ 지역 추가] — 지역명/면적/대상지 유형/위치(선택) 입력 → 지역 탭 생성<br>": "&nbsp;&nbsp;· [+ Add site] — enter site name, area, site category and optional location to create a site tab<br>",
     "&nbsp;&nbsp;· [지역 종합 분석] — 지역별 총 탄소저장량 비교 대시보드<br><br>": "&nbsp;&nbsp;· [Multi-site comparison] — dashboard comparing total carbon storage across sites<br><br>",
     "<i>국내·국외 통합 기여도 모듈은 현재 화면에서 비표시(코드·수식은 보존).</i><br><br>": "<i>The combined domestic/international contribution module is hidden in this build; its code and equations are retained.</i><br><br>",
     "데이터 출처: <i>상대생장식 자료_최종본.xlsx</i> 「기초 DB 자료」 시트": "Data source: <i>allometric equation dataset (final)</i>, \"base database\" sheet",

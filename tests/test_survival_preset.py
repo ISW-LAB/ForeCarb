@@ -127,6 +127,34 @@ class PresetWorkbookTests(unittest.TestCase):
         self.assertEqual(len(result.regions), 1)
         self.assertEqual((result.regions[0].width_m, result.regions[0].height_m), (20, 20))
 
+    def test_region_location_is_optional_and_round_trips(self) -> None:
+        """[지역] 시트의 위도·경도 — 선택 입력, 저장 후 다시 읽으면 같은 값, 잘못된 값은 안내 후 무시."""
+        regions = preset_io.example_regions()
+        self.assertEqual((regions[0].latitude, regions[0].longitude), preset_io.EXAMPLE_LOCATION)
+        regions[1].latitude, regions[1].longitude = 37.5665, 126.978
+        with TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "loc.xlsx")
+            preset_io.write_template(path, list(RESTORATION_ENVIRONMENTS), _library(), regions)
+            ws = load_workbook(path)["지역"]
+            self.assertEqual([ws.cell(1, c).value for c in (5, 6)], ["위도", "경도"])
+            ws.parent["지역"].cell(4, 5, 95)          # Profile 3: 위도 범위 밖, 경도 없음
+            ws.parent.save(path)
+            result = preset_io.read_preset(path, _names(lib.KIND_TREE), _names(lib.KIND_SHRUB),
+                                           RESTORATION_ENVIRONMENTS)
+        locations = [(r.latitude, r.longitude) for r in result.regions]
+        self.assertEqual(locations, [preset_io.EXAMPLE_LOCATION, (37.5665, 126.978), (None, None)])
+        self.assertEqual(result.errors, [])
+        self.assertEqual(len(result.notes), 1)
+
+    def test_validate_location(self) -> None:
+        self.assertIsNone(preset_io.validate_location("", None))
+        self.assertEqual(preset_io.validate_location("36.5", " 127.25 "), (36.5, 127.25))
+        for lat, lon in (("36.5", ""), ("91", "127"), ("36", "181"), ("abc", "127")):
+            with self.subTest(lat=lat, lon=lon), self.assertRaises(ValueError):
+                preset_io.validate_location(lat, lon)
+        self.assertEqual(preset_io.format_location(36.49861, 127.28962), "36.4986°N, 127.2896°E")
+        self.assertEqual(preset_io.format_location(-33.9, -70.6), "33.9000°S, 70.6000°W")
+
 
 class SurvivalExportTests(unittest.TestCase):
     def setUp(self) -> None:

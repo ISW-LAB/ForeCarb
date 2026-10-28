@@ -456,10 +456,11 @@ def _sheet_comparison(wb: Workbook, comparison_data: list) -> None:
     ws = wb.create_sheet(tr("지역_비교분석"))
 
     ws.cell(1, 1, tr("지역별 탄소저장량 및 면적 정규화 비교 분석")).font = TITLE_FONT
-    ws.merge_cells("A1:G1")
+    ws.merge_cells("A1:I1")
 
     headers = [tr("지역명"), tr("면적(㎡)"), tr("대상지 유형"), tr("교목(kgC)"), tr("관목(kgC)"),
-               tr("총 탄소저장량(kgC)"), tr("면적 정규화\n탄소밀도(kgC/㎡)")]
+               tr("총 탄소저장량(kgC)"), tr("면적 정규화\n탄소밀도(kgC/㎡)"),
+               tr("위도"), tr("경도")]
     for c, h in enumerate(headers, 1):
         ws.cell(2, c, h)
     _style_header_row(ws, 2, len(headers))
@@ -474,6 +475,11 @@ def _sheet_comparison(wb: Workbook, comparison_data: list) -> None:
         _num(ws.cell(i, 5), round(d["shrub"],   2))
         _num(ws.cell(i, 6), round(d["total"],   2))
         _num(ws.cell(i, 7), round(d["density"], 4), "#,##0.0000")
+        for col, key in ((8, "latitude"), (9, "longitude")):
+            if d.get(key) is not None:
+                _num(ws.cell(i, col), d[key], "0.000000")
+            else:
+                ws.cell(i, col).border = BORDER
 
     if comparison_data:
         sr      = len(comparison_data) + 3
@@ -485,10 +491,10 @@ def _sheet_comparison(wb: Workbook, comparison_data: list) -> None:
         _num(ws.cell(sr, 4), round(t_tree,  2))
         _num(ws.cell(sr, 5), round(t_shrub, 2))
         _num(ws.cell(sr, 6), round(grand,   2))
-        for ci in (2, 3, 7):
+        for ci in (2, 3, 7, 8, 9):
             ws.cell(sr, ci).border = BORDER
 
-    _set_widths(ws, [16, 12, 24, 16, 16, 20, 18])
+    _set_widths(ws, [16, 12, 24, 16, 16, 20, 18, 12, 12])
 
 
 def _render_comparison_chart_png(comparison_data: list):

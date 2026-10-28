@@ -802,6 +802,8 @@ class MainWindow(QMainWindow):
         self.region_name = region_name
         self.area_w = area_w
         self.area_h = area_h
+        # 지역 위치 (위도, 경도 — 십진수 도) 또는 None. 통합창이 설정·수정한다.
+        self.location: Optional[Tuple[float, float]] = None
 
         # 대상지 유형 — 대상지별 식을 보유한 수종은 그 식을, 나머지는 기본식에
         # 대상지별 생장량 보정계수를 적용한 레코드를 사용한다.
@@ -2165,6 +2167,8 @@ class MainWindow(QMainWindow):
                 "area_w": self.area_w,
                 "area_h": self.area_h,
                 "area": self.area_w * self.area_h,
+                "latitude": self.location[0] if self.location else None,
+                "longitude": self.location[1] if self.location else None,
             },
             "tree": self._payload_for("tree", total_tree),
             "shrub": self._payload_for("shrub", total_shrub),

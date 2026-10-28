@@ -127,9 +127,9 @@ EN: dict[str, str] = {
     "독립적으로 다룹니다.<br>":
         "Sites are added as tabs, each handling its own <b>carbon storage projection "
         "and species-level contribution</b>.<br>",
-    "&nbsp;&nbsp;· [+ 지역 추가] — 지역명/면적/대상지 유형 입력 → 지역 탭 생성<br>":
-        "&nbsp;&nbsp;· [+ Add site] — enter site name, area and site category to create "
-        "a site tab<br>",
+    "&nbsp;&nbsp;· [+ 지역 추가] — 지역명/면적/대상지 유형/위치(선택) 입력 → 지역 탭 생성<br>":
+        "&nbsp;&nbsp;· [+ Add site] — enter site name, area, site category and optional location "
+        "to create a site tab<br>",
     "&nbsp;&nbsp;· [지역 종합 분석] — 지역별 총 탄소저장량 비교 대시보드<br><br>":
         "&nbsp;&nbsp;· [Multi-site comparison] — dashboard comparing total carbon "
         "storage across sites<br><br>",
@@ -686,4 +686,34 @@ EN.update({
     "단가: {price:,.2f}원/tC · 클릭하여 수정": "Price: KRW {price:,.2f}/tC · Click to edit",
     "탄소 단가 설정": "Carbon price",
     "탄소 1톤(tC = 1,000 kgC)당 가격 (원)": "Price per tonne of carbon (tC = 1,000 kgC), KRW",
+})
+
+# 지역 위치 (위도·경도)
+EN.update({
+    "위도": "Latitude",
+    "경도": "Longitude",
+    "위치 (선택)": "Location (optional)",
+    "위도 (예: 36.4986)": "Latitude (e.g. 36.4986)",
+    "경도 (예: 127.2896)": "Longitude (e.g. 127.2896)",
+    "선택 입력 — 십진수 도(WGS84). 지도 앱에서 위치를 길게 눌러 복사한 값을 붙여 넣을 수 있습니다.":
+        "Optional — decimal degrees (WGS84). You can paste a coordinate pair copied from a map app.",
+    "위도와 경도를 함께 입력해 주세요": "Enter both latitude and longitude",
+    "위도·경도는 숫자(십진수 도)로 입력해 주세요": "Latitude and longitude must be numbers (decimal degrees)",
+    "위도는 -90 ~ 90 사이여야 합니다": "Latitude must be between -90 and 90",
+    "경도는 -180 ~ 180 사이여야 합니다": "Longitude must be between -180 and 180",
+    "[{sheet}] {row}행: {error} — 위치 없이 불러옵니다": "[{sheet}] Row {row}: {error} — loaded without a location",
+    "‘{name}’ 위치": "Location of ‘{name}’",
+    "위도 , 경도": "Latitude , Longitude",
+    "확인": "OK",
+    "두 칸을 모두 비우면 위치 정보가 삭제됩니다.": "Leave both fields blank to remove the location.",
+    "위치 확인": "Check location",
+    "　|　위치: <b>{loc}</b>": "　|　Location: <b>{loc}</b>",
+    "지도 보기": "Show on map",
+    "수정": "Edit",
+    "위치 입력": "Add location",
+    "   위도·경도는 선택 입력입니다 (십진수 도, 예: 36.4986 / 127.2896). 둘 다 적으면 지역 위치로 표시됩니다.":
+        "   Latitude and longitude are optional (decimal degrees, e.g. 36.4986 / 127.2896). "
+        "When both are given they are shown as the site location.",
+    "Profile 1 의 위도·경도는 입력 방법을 보여 주기 위한 예시 좌표(국립세종수목원 부근)입니다.":
+        "The Profile 1 coordinates are an example only (near the Sejong National Arboretum).",
 })

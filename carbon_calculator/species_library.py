@@ -12,7 +12,8 @@ from typing import Iterable
 import numpy as np
 
 from .data import (
-    DEFAULT_ENVIRONMENT, SpeciesData, shrub_species_for_env, tree_species_for_env,
+    DEFAULT_ENVIRONMENT, SpeciesData, growth_factor, shrub_species_for_env,
+    tree_species_for_env,
 )
 from .data2 import CARBON_FACTOR, EquationSpecies, species_map
 from .equation_eval import EvaluationError, evaluate
@@ -76,6 +77,7 @@ class LibraryRecord:
     var2_min: float = 0.0
     var2_max: float = 100.0
     var2_default: float = 10.0
+    growth_factor: float = 1.0                # extension 만: 가정 생장률에 곱할 티어 보정계수
 
     # ----- 분류 질의 -----
 
@@ -152,7 +154,8 @@ def _core_records(kind: str, environment: str = DEFAULT_ENVIRONMENT
     }
 
 
-def _extension_record(key: str, sp: EquationSpecies, origin: str) -> LibraryRecord:
+def _extension_record(key: str, sp: EquationSpecies, origin: str,
+                      environment: str = DEFAULT_ENVIRONMENT) -> LibraryRecord:
     return LibraryRecord(
         key=key,
         kind=_classify_kind(key, sp.var1_label),
@@ -166,6 +169,7 @@ def _extension_record(key: str, sp: EquationSpecies, origin: str) -> LibraryReco
         var2_min=float(sp.var2_min),
         var2_max=float(sp.var2_max),
         var2_default=float(sp.var2_default),
+        growth_factor=growth_factor(key, environment),
     )
 
 
@@ -182,7 +186,7 @@ def all_records(environment: str = DEFAULT_ENVIRONMENT) -> dict[str, LibraryReco
         for key, sp in species_map(origin, environment).items():
             if key in records:
                 continue  # core 레코드가 우선 (현재 키 충돌은 없음)
-            records[key] = _extension_record(key, sp, origin)
+            records[key] = _extension_record(key, sp, origin, environment)
     return records
 
 
