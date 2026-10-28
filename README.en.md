@@ -19,7 +19,7 @@ This README describes ForeCarb v1.0 and follows the accompanying manuscript. Fig
 | C5 | Code versioning system used | Git |
 | C6 | Languages, tools, and services used | Python, PyQt5, NumPy, Matplotlib, openpyxl, Pillow, PyVista/VTK, PyInstaller, Inno Setup |
 | C7 | Compilation requirements, OS & dependencies | Windows 10/11; Python ≥ 3.10; see [`requirements.txt`](requirements.txt) |
-| C8 | Developer documentation/manual | English: [README.en.md](README.en.md); Korean: [README.ko.md](README.ko.md) |
+| C8 | Developer documentation/manual | English: [README.en.md](README.en.md); Korean: [README.ko.md](README.ko.md); user manual (Korean, PDF): [탄소저장량_예측프로그램_사용자매뉴얼.pdf](docs/탄소저장량_예측프로그램_사용자매뉴얼.pdf) |
 | C9 | Support email | [kc.jeong-isw@cbnu.ac.kr](mailto:kc.jeong-isw@cbnu.ac.kr); [gc.jo-isw@cbnu.ac.kr](mailto:gc.jo-isw@cbnu.ac.kr) |
 
 [1. Architecture](#1-architecture-and-workflow) · [2. Equation library](#2-equation-library) · [3. Calculation](#3-calculation) · [4. Illustrative examples](#4-illustrative-examples) · [5. Install](#5-install-and-run) · [6. Edit & deploy](#6-edit-and-deploy-the-equation-library) · [7. Build](#7-build) · [8. Tests](#8-tests) · [9. Layout](#9-repository-layout) · [10. Citation](#10-citation) · [11. License](#11-license)
@@ -89,7 +89,7 @@ References identify the equation sources listed in the supporting reports and eq
 - `X` = DBH for trees, RCD for shrubs, in cm. Shrub equations fitted in mm are written as **`10X`**, with fitted limits converted to cm — the original relationship is preserved without refitting.
 - **Every species stores one record per site category**, and the application applies exactly the record for the selected category — there is no category-independent base equation (`SiteCategoryTests`). All four collections use the same `by_env` shape, keyed by the three categories.
 - Records that the sources actually differentiate carry different values: *Pinus densiflora* uses sheet rows 1 / 2 / 3 for the three categories. Every other species is initialized identically across the three and can be differentiated in the Manager as evidence becomes available.
-- **A growth factor** is applied on top of the selected record's annual diameter increments, held per category and growth form (default `1.0` = no adjustment), with an optional per-species override. It scales the 30-year scenario only; the equation is untouched, so year-0 stock does not move.
+- **Growth factors** are applied on top of the selected record's annual diameter increments: nine factors, **three site categories × growth tiers 1–3** (default `1.0` = no adjustment). Each species is assigned a tier per category (default tier 1), and records without stored increments scale their assumed 2 % rate by the same factor. An optional per-species override takes precedence. The factors scale the 30-year scenario only; the equation is untouched, so year-0 stock does not move. Older files with one tree and one shrub factor per category are read as tiers 1 and 2.
 - Full inventory: [`species_data.json`](species_data.json).
 
 #### Graph bases
@@ -276,7 +276,7 @@ Inventories can be entered from an Excel workbook instead of adding species one 
 
 | Sheet | Columns |
 |---|---|
-| `지역` (Regions) | site name · width (m) · length (m) · site category |
+| `지역` (Regions) | site name · width (m) · length (m) · site category · latitude · longitude (optional, decimal degrees) |
 | `수종` (Species) | site name · type (tree/shrub) · species · diameter (cm) · count · initial survival (%) · annual survival (%) · second variable |
 
 Korean or English headers and Korean or scientific species names are accepted; blank survival cells mean 100 %. Rows with unknown species or invalid values are skipped and listed after loading. [`presets/ForeCarb_데이터_예시.xlsx`](presets/ForeCarb_데이터_예시.xlsx) reproduces Profiles 1–3 of Table 2 and adds a survival example. User-edited coefficients (`a, b, CF`) are not stored in the workbook.
@@ -292,7 +292,7 @@ Tables are organized by site category — **one tab per category** (post-fire na
 - Each table lists **every species of that growth form** — 59 trees and 18 shrubs — with the coefficient columns (`a, b, CF`, range, growth increments) and the equation columns (equation string, range, variables) merged into one grid. Columns that do not apply to a row are empty and cannot be edited, and a **type** column marks each row as core, domestic or international.
 - Values are edited per category: the same species is adjusted independently on each of the three tabs.
 - Adding or deleting a species applies to all three categories at once, so every species always has exactly one record per category.
-- **Growth factor** inputs sit at the top of each category tab, one for trees and one for shrubs (default `1.0`); they multiply that category's growth increments.
+- **Growth factor** inputs sit at the top of each category tab, one per growth tier (tier 1, 2, 3; default `1.0`). The **growth tier** column of the table shows and sets each species' tier for that category; the species' growth increments are multiplied by its tier's factor.
 
 | Method | Description | Python required |
 |---|---|:---:|
@@ -355,6 +355,7 @@ python -m unittest discover -s tests -v
 │   ├── plotting.py / widgets.py / i18n.py / translations.py
 │   └── theme.py / font_config.py / ui_scale.py / qt_locale.py
 ├── presets/                       ← example input data workbook
+├── docs/                          ← user manual (Korean, PDF)
 ├── tests/test_core.py             ← 22 regression tests — Tables 2–3
 ├── tests/test_survival_preset.py  ← survival and data workbook tests
 └── figures/paper/                 ← Figures 1–6 from the accompanying manuscript
