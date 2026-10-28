@@ -25,7 +25,7 @@ This README describes ForeCarb v1.0 and follows the accompanying manuscript. Fig
 [1. Architecture](#1-architecture-and-workflow) · [2. Equation library](#2-equation-library) · [3. Calculation](#3-calculation) · [4. Illustrative examples](#4-illustrative-examples) · [5. Install](#5-install-and-run) · [6. Edit & deploy](#6-edit-and-deploy-the-equation-library) · [7. Build](#7-build) · [8. Tests](#8-tests) · [9. Layout](#9-repository-layout) · [10. Citation](#10-citation) · [11. License](#11-license)
 
 > [!IMPORTANT]
-> **Scope.** Allometric equations define diameter–biomass relationships; diameter development is prescribed separately through annual increments. Trajectories are therefore **deterministic outcomes under the specified growth assumptions** — not validated predictions. Estimates beyond the fitted diameter range are **extrapolations**. Scenarios assume that all planted individuals survive throughout the projection horizon. Planting-area footprints and 3D geometry are software-defined settings, not ecological carrying capacity, appropriate planting density, or measured plant architecture. Confirm that the response variable, biomass component, predictor units, and measurement protocol match the intended assessment context.
+> **Scope.** Allometric equations define diameter–biomass relationships; diameter development is prescribed separately through annual increments. Trajectories are therefore **deterministic outcomes under the specified growth assumptions** — not validated predictions. Estimates beyond the fitted diameter range are **extrapolations**. The baseline scenario assumes that all planted individuals survive throughout the projection horizon; optional per-species survival rates produce a separate, survival-adjusted result (Section 3). Planting-area footprints and 3D geometry are software-defined settings, not ecological carrying capacity, appropriate planting density, or measured plant architecture. Confirm that the response variable, biomass component, predictor units, and measurement protocol match the intended assessment context.
 
 ---
 
@@ -133,6 +133,17 @@ v_i(t) = 1 if D_min,i ≤ D_i(t) ≤ D_max,i, else 0                       … E
 - Eq. (3): total stock is **independent of site area**; density varies **inversely** with it.
 - Eq. (5) runs **after** calculation and only flags extrapolation — it never alters trajectories.
 - Domestic/international records use `Y_i = f_i(X_i, H_i)` via an AST allowlist (no Python `eval`). Storing no carbon fraction or increments, they apply a fixed **CF₀ = 0.5** and are excluded from the deterministic growth scenario analysis described in the manuscript. Diameter-basis graphs remain available.
+
+#### Survival-adjusted results (optional)
+
+```
+N_i(t)   = n_i · S0_i · s_i^t                                          … Eq. (6)
+C_i^S(t) = C_i(t) · S0_i · s_i^t
+```
+
+- `S0_i` is the **initial survival** (%) applied to the year-0 count, as in the earlier MATLAB carbon calculator; `s_i` is the **annual survival** (%) compounded each year. Both default to 100 %, which reproduces the baseline exactly.
+- Carbon scales linearly with the represented count, so Eq. (6) rescales the baseline trajectory without changing diameters or equations.
+- Survival-adjusted values are reported **alongside** the all-survive baseline, never in place of it: the stock gauges draw them as a dark inner bar, the **With survival** view plots solid (all survive) against dashed (with survival) curves next to a survival-based contribution chart, and XLSX exports add a `생존률_반영` sheet. The 3D view and cross-site comparison use the baseline.
 
 ---
 
@@ -253,6 +264,23 @@ python main.py --lang en    # English
 python main.py --lang ko    # Korean
 ```
 
+### Load and save input data
+
+Inventories can be entered from an Excel workbook instead of adding species one by one.
+
+| Menu | Action |
+|---|---|
+| **File → Load data** (`Ctrl+O`) | Creates one tab per site in the workbook and calculates immediately |
+| **File → Save data** (`Ctrl+S`) | Writes the inputs of the open sites in the same format (example data if no site is open) |
+| **Load data** button on a site tab | Fills only that tab from the workbook |
+
+| Sheet | Columns |
+|---|---|
+| `지역` (Regions) | site name · width (m) · length (m) · site category |
+| `수종` (Species) | site name · type (tree/shrub) · species · diameter (cm) · count · initial survival (%) · annual survival (%) · second variable |
+
+Korean or English headers and Korean or scientific species names are accepted; blank survival cells mean 100 %. Rows with unknown species or invalid values are skipped and listed after loading. [`presets/ForeCarb_데이터_예시.xlsx`](presets/ForeCarb_데이터_예시.xlsx) reproduces Profiles 1–3 of Table 2 and adds a survival example. User-edited coefficients (`a, b, CF`) are not stored in the workbook.
+
 ---
 
 ## 6. Edit and deploy the equation library
@@ -298,7 +326,7 @@ python build_updater.py              # Equation Library Manager (or build_librar
 python -m unittest discover -s tests -v
 ```
 
-22 regression tests reproduce Tables 2–3 and Figures 4–5: library record counts, area-normalized densities (`0.4972 / 0.3978 / 0.3315`), proportional scaling with represented count, diameter boundaries, scenario repeatability and year-zero agreement, shrub mm↔cm equivalence, execution of all 55 compatibility equations, and rejection of unsafe syntax. The same suite runs in CI on Windows with Python 3.10 and 3.11. Build environment and checksums: [BUILD_VERIFICATION.md](BUILD_VERIFICATION.md).
+22 regression tests reproduce Tables 2–3 and Figures 4–5: library record counts, area-normalized densities (`0.4972 / 0.3978 / 0.3315`), proportional scaling with represented count, diameter boundaries, scenario repeatability and year-zero agreement, shrub mm↔cm equivalence, execution of all 55 compatibility equations, and rejection of unsafe syntax. `tests/test_survival_preset.py` covers survival-adjusted projections (Eq. 6), the data workbook round trip, and the survival worksheet in XLSX exports. The same suite runs in CI on Windows with Python 3.10 and 3.11. Build environment and checksums: [BUILD_VERIFICATION.md](BUILD_VERIFICATION.md).
 
 ---
 
@@ -314,6 +342,8 @@ python -m unittest discover -s tests -v
 ├── carbon_calculator/
 │   ├── calculations.py                calculation engine — Eq. (1), (3), stage 6
 │   ├── input_limits.py                planting-area safeguard — Eq. (2), stage 5
+│   ├── survival.py                    survival-adjusted counts and stocks — Eq. (6)
+│   ├── preset_io.py                   Excel data load/save (Regions + Species sheets)
 │   ├── equation_eval.py               expression evaluation (AST allowlist)
 │   ├── data.py / data2.py             coefficients and equations (JSON-load fallback)
 │   ├── species_library.py             unified 77-record view (growth form, graph bases)
@@ -323,8 +353,10 @@ python -m unittest discover -s tests -v
 │   ├── excel_export.py                XLSX export — Figure 6, stage 8
 │   ├── main_window2.py                domestic/international screen (not exposed in v1.0)
 │   ├── plotting.py / widgets.py / i18n.py / translations.py
-│   └── theme.py / font_config.py / ui_scale.py
+│   └── theme.py / font_config.py / ui_scale.py / qt_locale.py
+├── presets/                       ← example input data workbook
 ├── tests/test_core.py             ← 22 regression tests — Tables 2–3
+├── tests/test_survival_preset.py  ← survival and data workbook tests
 └── figures/paper/                 ← Figures 1–6 from the accompanying manuscript
 ```
 
