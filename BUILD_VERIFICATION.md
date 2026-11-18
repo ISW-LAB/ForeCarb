@@ -8,9 +8,9 @@ not been repeated for v1.1. Rebuild the executables and the installer from the
 exact source commit cited in the revised manuscript and replace the checksums below before distributing binaries.
 
 The v1.1 source suite also checks category and whole-site extrapolation annotations.
-Figures 3 and 5 were rendered from the Qt/Matplotlib application; the 3D panels
-were rendered with PyVista off screen. Figure 6 contains values read from the
-regenerated Profile 1 workbook. No v1.1 binaries or public tag were created.
+Figure 5 (3D stands of Profile 1) was rendered from the application with
+PyVista off screen. Figure 6 contains values read from the regenerated
+workbooks of Profiles 1–3. The source is tagged `v1.1`; no v1.1 binaries were built.
 
 ## Environment (historical v1.0 build)
 

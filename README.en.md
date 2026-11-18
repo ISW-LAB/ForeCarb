@@ -6,7 +6,14 @@
 
 ForeCarb is an open-source Windows desktop application for assessing live biomass carbon stocks in mixed tree and shrub inventories at forest restoration sites. It combines allometric-equation management, unit-consistent calculation, cross-site comparison, deterministic growth scenarios over a **30-year horizon**, 3D visualization, and XLSX reporting.
 
-This README describes ForeCarb v1.1 and follows the accompanying manuscript. Figures 1–7 and Tables 1–5 match the manuscript; installation, build, and repository guidance is provided below.
+This README describes ForeCarb v1.1 and follows the accompanying manuscript. Figures 1–6 and Tables 1–5 match the manuscript; installation, build, and repository guidance is provided below.
+
+**Main contributions**
+
+- **Integrated allometric-equation management:** ForeCarb integrates equation-library management with established allometric methods; administrators update equations without altering calculation procedures.
+- **Equation library:** The library combines 22 core equation records with 55 additional published records.
+- **Site-level carbon-stock estimation:** Validated tree and shrub inventories yield species- and site-level carbon estimates.
+- **Site comparison and growth-scenario analysis:** Site comparisons and 30-year deterministic growth scenarios aid restoration planning.
 
 #### Code metadata
 
@@ -22,7 +29,7 @@ This README describes ForeCarb v1.1 and follows the accompanying manuscript. Fig
 | C8 | Developer documentation/manual | [README.en.md](README.en.md) (English); [README.ko.md](README.ko.md) (Korean); runnable example: [`reproduce_examples.py`](reproduce_examples.py) |
 | C9 | Support email | [kc.jeong-isw@cbnu.ac.kr](mailto:kc.jeong-isw@cbnu.ac.kr); [gc.jo-isw@cbnu.ac.kr](mailto:gc.jo-isw@cbnu.ac.kr) |
 
-[1. Architecture](#1-architecture-and-workflow) · [2. Equation library](#2-equation-library) · [3. Calculation](#3-calculation) · [4. Illustrative examples](#4-illustrative-examples) · [5. Install](#5-install-and-run) · [6. Edit & deploy](#6-edit-and-deploy-the-equation-library) · [7. Build](#7-build) · [8. Tests](#8-tests) · [9. Layout](#9-repository-layout) · [10. Citation](#10-citation) · [11. License](#11-license)
+[1. Architecture](#1-architecture-and-workflow) · [2. Equation library](#2-equation-library) · [3. Calculation](#3-calculation) · [4. Illustrative examples](#4-illustrative-examples) · [Limitations](#limitations-and-future-improvements) · [5. Install](#5-install-and-run) · [6. Edit & deploy](#6-edit-and-deploy-the-equation-library) · [7. Build](#7-build) · [8. Tests](#8-tests) · [9. Layout](#9-repository-layout) · [10. Citation](#10-citation) · [11. License](#11-license)
 
 > [!IMPORTANT]
 > **Scope.** Allometric equations define diameter–biomass relationships; diameter development is prescribed separately through annual increments. Trajectories are therefore **deterministic outcomes under the specified growth assumptions** — not validated predictions. Estimates beyond the fitted diameter range are **extrapolations**. The baseline scenario assumes that all planted individuals survive throughout the projection horizon; optional per-species survival rates produce a separate, survival-adjusted result (Section 3). Planting-area footprints and 3D geometry are software-defined settings, not ecological carrying capacity, appropriate planting density, or measured plant architecture. Confirm that the response variable, biomass component, predictor units, and measurement protocol match the intended assessment context.
@@ -253,19 +260,13 @@ Designed to separate variation from **inventory composition** from that introduc
 
 ### 4.4 Deterministic growth scenario visualization
 
-The scenario illustrates how prescribed diameter increments translate into changes in carbon stock. For Profile 1, total stock increases from **198.89 kg C at year 0** to **3,444.50 kg C at year 30**.
+The scenario illustrates how prescribed diameter increments translate into changes in carbon stock. For Profile 1, total stock increases from **198.89 kg C at year 0** to **3,444.50 kg C at year 30** (Figure 5).
 
 <p align="center">
-  <img src="figures/paper/fig5_trajectories.png" alt="Tree and shrub trajectories of Profile 1 with extrapolated estimates marked" width="100%">
+  <img src="figures/paper/fig5_growth_3d.png" alt="Simulated 3D stands of Profile 1 at years 0, 15 and 30" width="100%">
 </p>
 
-> **Figure 5.** Profile 1 trajectories for (a) trees and (b) shrubs. Dotted lines/open markers flag extrapolation; shading shows its contribution. Year-30 extrapolated shares: trees 39.2%, shrubs 100%, whole site 46.2%.
-
-<p align="center">
-  <img src="figures/paper/fig6_growth_3d.png" alt="Simulated 3D stands of Profile 1 at years 0, 15 and 30" width="100%">
-</p>
-
-> **Figure 6.** Simulated 3D stands of Profile 1 at years 0 (a), 15 (b), and 30 (c) at a common scale, with whole-site totals and extrapolated shares. Geometry is software-defined.
+> **Figure 5.** Simulated 3D stands of Profile 1 at years 0 (a), 15 (b), and 30 (c) at a common scale, with whole-site totals. Geometry is software-defined.
 
 | Year | Trees (kg C) | Shrubs (kg C) | **Total (kg C)** | Extrapolated share |
 |:---:|---:|---:|---:|---:|
@@ -273,7 +274,7 @@ The scenario illustrates how prescribed diameter increments translate into chang
 | 15 | 763.85 | 136.35 | **900.20** | 15.1 % |
 | 30 | 3,050.16 | 394.34 | **3,444.50** | 46.2 % |
 
-**Extrapolated share.** Initial-diameter validation applies only to year 0, so projected diameters can leave the fitted ranges. In Profile 1 three of the five records do: *Rhododendron yedoense* f. *poukhanense* from year 4 (2.44 cm > 2.2 cm), *Weigela subsessilis* from year 9 (4.20 cm > 3.9 cm) and *Pinus densiflora* in year 30 (15.1 cm > 15 cm). Estimates outside the fitted ranges account for **15.1 % of the total at year 15** (136.35 of 900.20 kg C) and **46.2 % at year 30** (1,590.13 of 3,444.50 kg C; 39.2 % of the tree stock and 100 % of the shrub stock). The application shows these shares in the plots and in the XLSX report. The 3D views are software-defined scenario geometry, not measured plant architecture.
+**Estimates outside the fitted ranges.** Initial-diameter validation applies only to year 0, so projected diameters can leave the fitted ranges. In Profile 1 three of the five records do (Table 5): *Rhododendron yedoense* f. *poukhanense* from year 4 (2.44 cm > 2.2 cm), *Weigela subsessilis* from year 9 (4.20 cm > 3.9 cm) and *Pinus densiflora* in year 30 (15.1 cm > 15 cm). Such estimates remain in the trajectory but are flagged: the year-based plots and the annual audit in the XLSX report mark them and report the extrapolated share. Its size, and what it means for long-horizon totals, is discussed under [Limitations and future improvements](#limitations-and-future-improvements). The 3D views are software-defined scenario geometry, not measured plant architecture.
 
 ### 4.5 Two-level record validation and planting-area safeguard
 
@@ -319,14 +320,30 @@ Values outside the fitted ranges were rejected and values at the limits accepted
 ### 4.6 Result reporting
 
 <p align="center">
-  <img src="figures/paper/fig7_xlsx_export.png" alt="Example XLSX output from ForeCarb" width="100%">
+  <img src="figures/paper/fig6_xlsx_export.png" alt="Example XLSX output from ForeCarb" width="100%">
 </p>
 
-> **Figure 7.** Selected XLSX fields for Profiles 1–3: (a) stocks/extrapolated shares at selected years; (b) year-0 contributions, IDs, overrides, first out-of-range years, and year-30 status. Species shares use tree/shrub subtotals. Displayed fields are rearranged; complete workbooks retain all records and years.
+> **Figure 6.** Selected XLSX fields for Profiles 1–3: (a) stocks/extrapolated shares at selected years; (b) year-0 contributions, IDs, overrides, first out-of-range years, and year-30 status. Species shares use tree/shrub subtotals. Displayed fields are rearranged; complete workbooks retain all records and years.
 
 **(a)** total stock and extrapolated share per profile at selected years · **(b)** species-level stocks and shares, equation IDs, parameter changes, the first year outside the fitted range, and the status at year 30. Additional worksheets hold site-comparison results and associated figures.
 
 Two further worksheets document how each value was obtained. **`Calculation_details`** lists, for every accepted inventory record, the equation ID, collection, library key, equation applied, predictor and input value, predictor scaling `q`, secondary input, biomass per individual, `CF`, count, carbon stock, any user change to `a`, `b` or `CF` (library value → value used), the fitted range, the growth setting, the first year outside the fitted range and the status at year 30; records excluded from the calculation are listed with the reason, and the header gives the software version, the content fingerprint (SHA-256) of the equation library, the site and the planting areas used by the safeguard. **`Fitted_range_audit`** gives, for every year, the totals, the stock obtained by extrapolation, its share, and the flag `v_i(t)` of each record.
+
+---
+
+## Limitations and future improvements
+
+This section follows the Discussion of the manuscript.
+
+**Limitations**
+
+- **Uniform carbon fraction.** A single CF of 0.50 across trees and shrubs ignores species variation; replacing 0.50 by 0.47 reduces the affected estimates by 6 % (S12 already uses 0.45).
+- **Fixed growth intervals.** Fixed 10-year increments can obscure rapid early growth and nonlinear age effects in shrubs.
+- **Multi-stem shrubs.** RCD-only models omit stem number and may miss biomass differences between multi-stem individuals of similar diameter.
+- **Fitted ranges.** Estimates beyond the fitted ranges are flagged without correction. In Profile 1 they supply **15.1 %** of the stock at year 15 and **46.2 %** at year 30 (1,590.13 of 3,444.50 kg C; trees 39.2 %, shrubs 100 %), which limits the interpretation of long-horizon totals.
+- **Uncertainty.** Uncertainties in allometric equations, carbon fractions, and growth increments are not propagated; the curves are conditional scenarios rather than confidence intervals.
+
+**Future improvements.** Planned versions will add flexible age-dependent growth functions, species-specific parameters, uncertainty propagation, and independent field validation.
 
 ---
 
@@ -424,7 +441,7 @@ python build_updater.py              # Equation Library Manager (or build_librar
 python -m unittest discover -s tests -v
 ```
 
-22 regression tests reproduce Tables 3–4 and Figures 4–6: library record counts, area-normalized densities (`0.4972 / 0.3978 / 0.3315`), proportional scaling with represented count, diameter boundaries, scenario repeatability and year-zero agreement, shrub mm↔cm equivalence, execution of all 55 compatibility equations, and rejection of unsafe syntax. `tests/test_survival_preset.py` covers survival-adjusted projections (Eq. 6), the data workbook round trip, and the survival worksheet in XLSX exports. The same suite runs in CI on Windows with Python 3.10 and 3.11. `tests/test_fitted_range_audit.py` covers the fitted-range audit (Eq. 5), the extrapolated share and first years outside the fitted range for Profile 1, equation IDs, the `Calculation_details` and `Fitted_range_audit` worksheets, the planting-area settings, and the reproduction of the bundled example workbook. Build environment and checksums: [BUILD_VERIFICATION.md](BUILD_VERIFICATION.md).
+22 regression tests reproduce Tables 3–4 and Figures 4–5: library record counts, area-normalized densities (`0.4972 / 0.3978 / 0.3315`), proportional scaling with represented count, diameter boundaries, scenario repeatability and year-zero agreement, shrub mm↔cm equivalence, execution of all 55 compatibility equations, and rejection of unsafe syntax. `tests/test_survival_preset.py` covers survival-adjusted projections (Eq. 6), the data workbook round trip, and the survival worksheet in XLSX exports. The same suite runs in CI on Windows with Python 3.10 and 3.11. `tests/test_fitted_range_audit.py` covers the fitted-range audit (Eq. 5), the extrapolated share and first years outside the fitted range for Profile 1, equation IDs, the `Calculation_details` and `Fitted_range_audit` worksheets, the planting-area settings, and the reproduction of the bundled example workbook. Build environment and checksums: [BUILD_VERIFICATION.md](BUILD_VERIFICATION.md).
 
 ---
 
@@ -449,8 +466,8 @@ python -m unittest discover -s tests -v
 │   ├── species_library.py             unified 77-record view (growth form, graph bases)
 │   ├── main_window.py                 site assessment — Figure 3, stages 4–7
 │   ├── combined_window.py             integrated window, per-site tabs — Figure 4
-│   ├── tree_simulation/               3D growth visualization — Figure 6
-│   ├── excel_export.py                XLSX export — Figure 7, stage 8
+│   ├── tree_simulation/               3D growth visualization — Figure 5
+│   ├── excel_export.py                XLSX export — Figure 6, stage 8
 │   ├── main_window2.py                domestic/international screen (not exposed in v1.0)
 │   ├── plotting.py / widgets.py / i18n.py / translations.py
 │   └── theme.py / font_config.py / ui_scale.py / qt_locale.py
@@ -459,7 +476,7 @@ python -m unittest discover -s tests -v
 ├── tests/test_core.py             ← 22 regression tests — Tables 3–4
 ├── tests/test_survival_preset.py  ← survival and data workbook tests
 ├── tests/test_fitted_range_audit.py ← fitted-range audit, report details, settings, reproduction
-└── figures/paper/                 ← Figures 1–7 from the accompanying manuscript
+└── figures/paper/                 ← Figures 1–6 from the accompanying manuscript
 ```
 
 **Troubleshooting** — missing PyQt5: `pip install -r requirements.txt` · PyInstaller build error: `--rebuild-venv` · exe exits at launch: rebuild with `--debug` and read the console · broken Korean glyphs: install "Malgun Gothic" · text too large/small: adjust `FONT_SIZE_DELTA` in `carbon_calculator\font_config.py`.

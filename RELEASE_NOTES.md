@@ -6,7 +6,7 @@ in peer review; the allometric equations, coefficients, carbon fractions and
 growth increments of the equation library are unchanged, and every value of the
 manuscript examples computed with v1.0 is reproduced.
 
-The release is tagged `v1.1`, which is the version cited in the manuscript; it does not include rebuilt v1.1 binaries. The documentation follows the manuscript: the source compilation defines the response of the 22 core equations as the dry weight of the whole individual (total biomass), and the planting-area defaults are based on crown widths measured in our young-tree and shrub sampling.
+The release is tagged `v1.1`, which is the version cited in the manuscript; it does not include rebuilt v1.1 binaries. The documentation follows the manuscript: the source compilation defines the response of the 22 core equations as the dry weight of the whole individual (total biomass), and the planting-area defaults are based on crown widths measured in our young-tree and shrub sampling. The README presents the six figures and five tables of the manuscript, lists its main contributions, and summarizes its Discussion under "Limitations and future improvements".
 
 ## Fitted-range audit of growth scenarios
 
