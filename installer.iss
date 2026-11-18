@@ -19,12 +19,12 @@
 ;    B) 명령줄:
 ;         "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
 ;
-;    → installer_output\FORECAST-SW_Setup_1.0.exe 생성
+;    → installer_output\FORECAST-SW_Setup_1.1.exe 생성
 ;       이 Setup.exe 하나만 다른 컴퓨터로 옮겨 실행하면 설치된다.
 ; ============================================================================
 
 #define MyAppName "FORECAST-SW"
-#define MyAppVersion "1.0"
+#define MyAppVersion "1.1"
 #define MyAppPublisher "세종수목원"
 #define MyAppExeName "FORECAST-SW.exe"
 #define MyLibraryManagerExeName "FORECAST-SW-Equation-Library-Manager.exe"

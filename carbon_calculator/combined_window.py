@@ -16,11 +16,11 @@ from typing import List, Optional
 from PyQt5.QtCore import QRect, Qt, QUrl
 from PyQt5.QtGui import QDesktopServices, QFont, QFontMetrics
 from PyQt5.QtWidgets import (
-    QAction, QActionGroup, QApplication, QComboBox, QDialog, QDialogButtonBox,
+    QAction, QActionGroup, QApplication, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
     QFileDialog, QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
     QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QSpinBox,
     QTabBar, QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout,
-    QWidget,
+    QWidget, QSizePolicy,
 )
 
 from .calculations import calculate_site_carbon_metrics
@@ -29,6 +29,7 @@ from .i18n import (
     LANG_EN, LANG_KO, environment_name, get_language, save_language, set_language, tr,
 )
 from .excel_export import export_all_regions_to_excel
+from . import input_limits
 from . import preset_io
 from .main_window import MainWindow as Carbon1Window
 from .main_window2 import Carbon2MainWindow
@@ -161,6 +162,84 @@ class LocationDialog(QDialog):
 
 
 # ------------------------------ 지역 추가 다이얼로그 ------------------------------
+
+class PlantingAreaDialog(QDialog):
+    """식재 면적 입력 한도 — 교목·관목 개체당 식재 면적(m²)을 사용자가 정한다.
+
+    이 값은 입력한 개체 수가 대상지 면적에 들어갈 수 있는지 점검하는 데만 쓰이며
+    바이오매스·탄소저장량 계산에는 관여하지 않는다(`input_limits` 참고).
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(tr("식재 면적 입력 한도"))
+        self.setModal(True)
+        apply_dialog_size(self, 560, 520)
+
+        layout = QVBoxLayout(self)
+        intro = QLabel(tr(
+            "교목·관목 개체당 식재 면적입니다. 입력한 개체 수가 대상지 면적에 들어갈 수 있는지 "
+            "점검하는 데만 쓰이며, 바이오매스·탄소저장량·탄소밀도 계산에는 영향을 주지 않습니다.\n\n"
+            "기본값 1.00 m²(교목 1 m × 1 m)과 0.25 m²(관목 0.5 m × 0.5 m)는 조밀한 식재에 "
+            "해당하는 값입니다. 대상지의 식재 설계(식재 간격)에 맞게 조정하세요."))
+        intro.setWordWrap(True)
+        intro.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        intro.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        intro.ensurePolished()
+        intro.setMinimumHeight(intro.heightForWidth(max(1, self.width() - 40)) + px(20))
+        layout.addWidget(intro)
+        layout.addSpacing(px(12))
+
+        tree, shrub = input_limits.planting_unit_areas()
+        form = QFormLayout()
+        self.tree_spin = self._area_spin(tree)
+        self.shrub_spin = self._area_spin(shrub)
+        form.addRow(tr("교목 개체당 식재 면적"), self.tree_spin)
+        form.addRow(tr("관목 개체당 식재 면적"), self.shrub_spin)
+        layout.addLayout(form)
+
+        self.density_label = QLabel()
+        self.density_label.setStyleSheet("color: #6B7780;")
+        self.density_label.setWordWrap(True)
+        layout.addWidget(self.density_label)
+        self.tree_spin.valueChanged.connect(self._refresh_density)
+        self.shrub_spin.valueChanged.connect(self._refresh_density)
+        self._refresh_density()
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Ok).setText(tr("확인"))
+        buttons.button(QDialogButtonBox.Cancel).setText(tr("취소"))
+        self.reset_button = QPushButton(tr("기본값으로 복원"))
+        buttons.addButton(self.reset_button, QDialogButtonBox.ResetRole)
+        self.reset_button.clicked.connect(self._restore_defaults)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    @staticmethod
+    def _area_spin(value: float) -> QDoubleSpinBox:
+        spin = QDoubleSpinBox()
+        spin.setDecimals(2)
+        spin.setSingleStep(0.25)
+        spin.setRange(input_limits.MIN_PLANTING_AREA_M2, input_limits.MAX_PLANTING_AREA_M2)
+        spin.setSuffix(" m²")
+        spin.setValue(float(value))
+        return spin
+
+    def _refresh_density(self) -> None:
+        tree, shrub = self.values()
+        self.density_label.setText(
+            tr("최대 식재 밀도 환산: 교목 {t:,.0f} 본/ha · 관목 {s:,.0f} 본/ha")
+            .format(t=10000.0 / tree, s=10000.0 / shrub))
+
+    def _restore_defaults(self) -> None:
+        self.tree_spin.setValue(input_limits.DEFAULT_TREE_PLANTING_AREA_M2)
+        self.shrub_spin.setValue(input_limits.DEFAULT_SHRUB_PLANTING_AREA_M2)
+
+    def values(self):
+        """(교목, 관목) 개체당 식재 면적 m²."""
+        return self.tree_spin.value(), self.shrub_spin.value()
+
 
 class AddRegionDialog(QDialog):
     """지역명 · 면적(가로×세로 m) · 대상지 유형 · 위치(선택) 입력 모달."""
@@ -881,6 +960,19 @@ class CombinedMainWindow(QMainWindow):
         data = [build_region_comparison_record(ordered[i]) for i in indices]
         RegionComparisonDialog(data, self).exec_()
 
+    # ----- 설정: 식재 면적 입력 한도 -----
+
+    def _edit_planting_area(self) -> None:
+        """교목·관목 개체당 식재 면적을 바꾼다 (다음 [계 산]부터 적용, 다음 실행에도 유지)."""
+        dlg = PlantingAreaDialog(self)
+        if dlg.exec_() != QDialog.Accepted:
+            return
+        tree, shrub = input_limits.set_planting_unit_areas(*dlg.values())
+        input_limits.save_unit_areas()
+        self._status_label.setText(
+            tr("식재 면적 입력 한도: 교목 {t:g} m² · 관목 {s:g} m² — 다음 [계 산]부터 적용됩니다.")
+            .format(t=tree, s=shrub))
+
     def _export_all_regions_excel(self) -> None:
         """선택한 지역들의 탄소저장량 추정치·기여도·비교분석·그래프를 통합 Excel로 저장."""
         if not self._regions:
@@ -954,7 +1046,8 @@ class CombinedMainWindow(QMainWindow):
         QMessageBox.information(
             self, tr("저장 완료"),
             tr("통합 분석 결과가 저장되었습니다:\n{path}\n\n"
-               "포함된 시트: 지역별_추정치 · 탄소_기여도 · 생존률_반영 · 지역_비교분석 · 그래프")
+               "포함된 시트: 지역별_추정치 · 탄소_기여도 · 생존률_반영 · 지역_비교분석 · "
+               "계산근거 · 적합범위_점검 · 그래프")
             .format(path=path),
         )
 
@@ -992,6 +1085,12 @@ class CombinedMainWindow(QMainWindow):
         dash_action.setShortcut("Ctrl+D")
         dash_action.triggered.connect(self._open_dashboard)
         region_menu.addAction(dash_action)
+
+        # 설정 — 식재 면적 입력 한도(개체당 식재 면적). 계산식에는 관여하지 않는다.
+        settings_menu = menubar.addMenu(tr("설정(&S)"))
+        planting_action = QAction(tr("식재 면적 입력 한도(&P)…"), self)
+        planting_action.triggered.connect(self._edit_planting_area)
+        settings_menu.addAction(planting_action)
 
         # 언어 — 필요 시 확인을 받은 뒤 저장하고, 이 창을 그대로 새 언어로 재구성한다
         # (프로세스 재시작 없음).

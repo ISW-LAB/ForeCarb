@@ -15,6 +15,7 @@ matplotlib.use("Qt5Agg")
 warnings.filterwarnings("ignore", message=".*constrained_layout not applied.*")
 
 import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
 
@@ -231,13 +232,24 @@ class MatplotlibCanvas(FigureCanvasQTAgg):
     def plot_multi_projection(self, series, title: str,
                               ylabel: str | None = None,
                               xlabel: str | None = None,
-                              show_title: bool = True) -> None:
+                              show_title: bool = True,
+                              outside=None,
+                              extrapolated=None,
+                              extrapolation_note: str | None = None) -> None:
         """
         여러 추정 곡선을 한 그래프에 중첩 표시.
 
         series: [(label, years, carbon, is_total), ...]
           - is_total=True 인 곡선은 굵은 점선(강조색)으로 그려 "총합"을 시각 구분.
         show_title=False 면 축 제목을 그리지 않는다(호출측이 패널 위 라벨로 제목을 표시할 때).
+
+        적합범위 점검(선택 인자 — 주지 않으면 기존과 똑같이 그린다):
+          outside: series 와 같은 순서의 리스트. 각 항목은 연도별 bool 배열
+            (True = 그 해의 추정이 적합 직경범위 밖, 즉 외삽) 또는 None.
+            범위 밖 구간은 같은 색의 점선과 빈 표식으로 바꿔 그린다.
+          extrapolated: 합계 곡선(is_total) 가운데 외삽 추정이 차지하는 탄소량의
+            연도별 배열. 합계 곡선 바로 아래에 그 몫을 빗금 음영으로 표시한다.
+          extrapolation_note: 축 안 왼쪽 위에 적을 안내문(예: 30년 외삽 비율).
         """
         # Resolve translated defaults at call time so the selected startup
         # language is reflected even though this module was imported earlier.
@@ -252,12 +264,15 @@ class MatplotlibCanvas(FigureCanvasQTAgg):
         color_cycle = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
         specs: list = []
         ci = 0
-        for label, years, carbon, is_total in series:
+        marked_outside = False
+        shaded_total = False
+        for index, (label, years, carbon, is_total) in enumerate(series):
             if is_total:
                 line, = self.ax.plot(
                     years, carbon, color="#C0392B", linewidth=2.6,
                     linestyle="--", marker="s", markersize=4, label=label, zorder=5,
                 )
+                shaded_total = self._shade_extrapolated(years, carbon, extrapolated) or shaded_total
             else:
                 color = color_cycle[ci % len(color_cycle)] if color_cycle else None
                 ci += 1
@@ -265,6 +280,8 @@ class MatplotlibCanvas(FigureCanvasQTAgg):
                     years, carbon, color=color, linewidth=1.8,
                     marker="o", markersize=3.5, label=label,
                 )
+                mask = outside[index] if outside is not None and index < len(outside) else None
+                marked_outside = self._mark_outside_range(line, years, carbon, mask) or marked_outside
             line.set_pickradius(6)
             specs.append((line, list(years), list(carbon), label))
 
@@ -276,14 +293,79 @@ class MatplotlibCanvas(FigureCanvasQTAgg):
         # 범례는 그래프 내부를 침범하지 않도록 **축 바깥 오른쪽**에 배치 (constrained_layout 이
         # 가로 자리를 확보). 항목이 많으면 세로로 넘쳐 잘리므로 열 수를 늘려 옆으로 펼친다.
         ncol = 1 + (len(specs) - 1) // 10  # 한 열에 ~10개씩 → 16개 이상이면 2열+
+        handles, labels = self.ax.get_legend_handles_labels()
+        if marked_outside:
+            from matplotlib.lines import Line2D
+            handles.append(Line2D([], [], color="#555555", linewidth=1.8, linestyle=":",
+                                  marker="o", markersize=4.5, markerfacecolor="white"))
+            labels.append(tr("적합범위 밖(외삽)"))
+        if shaded_total:
+            from matplotlib.patches import Patch
+            handles.append(Patch(facecolor="#C0392B", alpha=0.18, hatch="////",
+                                 edgecolor="#C0392B", linewidth=0.0))
+            labels.append(tr("합계 중 외삽분"))
         self.ax.legend(
+            handles, labels,
             fontsize=_fs(PLOT_LEGEND_PT), loc="upper left", bbox_to_anchor=(1.01, 1.0),
             framealpha=0.95, borderaxespad=0.0, ncol=max(1, ncol),
         )
+        if extrapolation_note:
+            self.ax.text(
+                1.03, 0.35, extrapolation_note, transform=self.ax.transAxes,
+                ha="left", va="top", fontsize=_fs(PLOT_ANNOTATION_PT), color="#7A5C00",
+                bbox=dict(boxstyle="round,pad=0.3", fc="#FFF8E1", ec="#E3CF8A", alpha=0.95),
+                zorder=6,
+            )
         self._install_hover(specs, xlabel, ylabel)
         self._fit_axes_text()
         self._fit_title()
         self.draw_idle()
+
+    def _mark_outside_range(self, line, years, carbon, mask) -> bool:
+        """적합범위 밖(외삽) 구간을 같은 색의 점선 + 빈 표식으로 바꿔 그린다.
+
+        원래 곡선(호버 툴팁이 쓰는 아티스트)은 그대로 두고, 범위 밖 구간만 흰 선으로
+        덮은 뒤 점선과 빈 표식을 올린다. 표시한 구간이 있으면 True.
+        """
+        if mask is None:
+            return False
+        flags = np.asarray(mask, dtype=bool)
+        ys = np.asarray(carbon, dtype=float)
+        xs = np.asarray(years, dtype=float)
+        if flags.shape != ys.shape or not flags.any():
+            return False
+        # 직전(범위 안) 점을 포함해 실선과 점선이 끊기지 않게 잇는다.
+        joined = flags.copy()
+        joined[:-1] |= flags[1:]
+        segment = np.where(joined, ys, np.nan)
+        color = line.get_color()
+        width = line.get_linewidth()
+        z = line.get_zorder()
+        self.ax.plot(xs, segment, color="white", linewidth=width + 1.8, zorder=z + 0.1,
+                     solid_capstyle="butt")
+        self.ax.plot(xs, segment, color=color, linewidth=width, linestyle=":", zorder=z + 0.2)
+        self.ax.plot(xs[flags], ys[flags], linestyle="none", marker="o",
+                     markersize=line.get_markersize() + 1.0, markerfacecolor="white",
+                     markeredgecolor=color, markeredgewidth=1.0, zorder=z + 0.3)
+        return True
+
+    def _shade_extrapolated(self, years, total, extrapolated) -> bool:
+        """합계 곡선 아래에 외삽 추정이 차지하는 몫을 빗금 음영으로 표시한다."""
+        if extrapolated is None:
+            return False
+        part = np.asarray(extrapolated, dtype=float)
+        top = np.asarray(total, dtype=float)
+        if part.shape != top.shape or not np.any(part > 0):
+            return False
+        # 외삽분이 처음 생기는 해의 직전 점부터 칠해, 한 해만 해당해도 쐐기 모양으로 보이게 한다.
+        where = part > 0
+        where[:-1] |= where[1:]
+        self.ax.fill_between(
+            np.asarray(years, dtype=float), top - part, top, where=where,
+            facecolor="#C0392B", alpha=0.18, hatch="////", edgecolor="#C0392B",
+            linewidth=0.0, zorder=1.5,
+        )
+        return True
 
     def plot_survival_projection(self, years, groups, ylabel: str | None = None,
                                  xlabel: str | None = None) -> None:

@@ -19,7 +19,7 @@ import sys
 
 from PyQt5.QtWidgets import QApplication
 
-from carbon_calculator import i18n
+from carbon_calculator import i18n, input_limits
 from carbon_calculator.combined_window import CombinedMainWindow
 from carbon_calculator.font_config import setup_application_fonts
 from carbon_calculator.language_dialog import LanguageDialog
@@ -59,6 +59,8 @@ def main() -> int:
 
     # 언어 결정은 폰트/테마 적용보다 앞선다 (선택 창은 자체 문구를 사용).
     i18n.set_language(_resolve_language(args))
+    # 이전 실행에서 저장한 식재 면적 입력 한도(개체당 식재 면적)를 적용한다.
+    input_limits.load_saved_unit_areas()
 
     scale = ui_scale(app)              # 모니터 크기 기준 UI 스케일 1회 계산
     setup_application_fonts(app, scale)

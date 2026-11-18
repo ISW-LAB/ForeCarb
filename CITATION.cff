@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use FORECAST-SW in research, please cite the accompanying SoftwareX article and this software release."
 title: "FORECAST-SW: Forest Carbon Estimation and Scenario Analysis Software for Restoration Sites"
 type: software
-version: 1.0
-date-released: 2026-09-07
+version: 1.1
+date-released: 2026-11-17
 authors:
   - family-names: Kim
     given-names: Chan-Beom

@@ -11,6 +11,8 @@ from typing import Iterable
 
 import numpy as np
 
+from . import data as _data
+from . import data2 as _data2
 from .data import (
     DEFAULT_ENVIRONMENT, SpeciesData, growth_factor, shrub_species_for_env,
     tree_species_for_env,
@@ -309,3 +311,94 @@ def carbon_by_diameter(record: LibraryRecord, axis: Iterable[float],
         except LibraryError:
             values[i] = np.nan
     return values
+
+
+# ─────────────────────────── 식 식별자 · 라이브러리 식별 ───────────────────────────
+
+# 컬렉션 코드 → species_data.json 의 섹션 이름. 보고서의 '식 ID' 는 이 코드에
+# 섹션 안 순번(1부터)을 붙인 값이다 (예: T01, S10, D21, I03).
+COLLECTION_SECTIONS: dict[str, str] = {
+    "T": "TREE_BASE",
+    "S": "SHRUB_SPECIES",
+    "D": "DOMESTIC_SPECIES",
+    "I": "FOREIGN_SPECIES",
+}
+
+
+def _collection_keys() -> dict[str, list[str]]:
+    """컬렉션별 레코드 키를 라이브러리 파일의 순서대로 돌려준다.
+
+    `data`·`data2` 의 모듈 전역은 JSON 로드 때 교체되므로 호출 시점에 읽는다.
+    """
+    return {
+        "T": list(_data.TREE_BASE.keys()),
+        "S": list(_data.SHRUB_BASE.keys()),
+        "D": list(_data2.DOMESTIC_BY_ENV.keys()),
+        "I": list(_data2.FOREIGN_BY_ENV.keys()),
+    }
+
+
+def equation_ids() -> dict[str, str]:
+    """{레코드 키: 식 ID}. ID = 컬렉션 코드(T·S·D·I) + 섹션 안 순번 두 자리.
+
+    순번은 불러온 `species_data.json` 의 순서를 따르므로 같은 라이브러리 파일에서는
+    항상 같은 값이다. 라이브러리를 고치면 순번이 달라질 수 있으므로 보고서에는
+    레코드 키와 라이브러리 지문(`library_identity`)을 함께 기록한다.
+    """
+    ids: dict[str, str] = {}
+    for code, keys in _collection_keys().items():
+        for index, key in enumerate(keys, start=1):
+            ids.setdefault(key, f"{code}{index:02d}")
+    return ids
+
+
+def equation_id(key: str) -> str:
+    """레코드 키의 식 ID. 라이브러리에 없는 키는 빈 문자열."""
+    return equation_ids().get(key, "")
+
+
+def collection_code(record: LibraryRecord) -> str:
+    """레코드가 속한 컬렉션 코드 (T 교목 · S 관목 · D 국내 · I 국외)."""
+    if record.is_core:
+        return "T" if record.kind == KIND_TREE else "S"
+    return "D" if record.origin == ORIGIN_DOMESTIC else "I"
+
+
+def collection_label(code: str) -> str:
+    """컬렉션 코드의 표시 이름 (현재 언어)."""
+    return {"T": tr("교목"), "S": tr("관목"), "D": tr("국내"), "I": tr("국외")}.get(code, code)
+
+
+def library_identity() -> dict:
+    """불러온 식 라이브러리의 식별 정보 — 파일 이름, 스키마 버전, 내용 지문.
+
+    지문은 JSON 내용을 정규화(키 정렬·공백 제거)한 문자열의 SHA-256 이므로
+    줄바꿈 방식이나 들여쓰기가 달라도 내용이 같으면 같은 값이 나온다.
+    파일을 찾지 못하면(내장 기본값 사용) 값이 모두 None 이다.
+    """
+    import hashlib
+    import json
+    import pathlib
+    import sys
+
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates = [pathlib.Path(sys.executable).parent, pathlib.Path(meipass)]
+    else:
+        candidates = [pathlib.Path(__file__).resolve().parent.parent]
+    for base in candidates:
+        path = base / "species_data.json"
+        if not path.exists():
+            continue
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 — 읽지 못하면 내장 기본값이 쓰인다
+            continue
+        canonical = json.dumps(raw, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        schema = raw.get("_schema") if isinstance(raw.get("_schema"), dict) else {}
+        return {
+            "file": path.name,
+            "schema_version": schema.get("version"),
+            "sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+        }
+    return {"file": None, "schema_version": None, "sha256": None}

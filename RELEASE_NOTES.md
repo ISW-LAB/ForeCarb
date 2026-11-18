@@ -1,3 +1,71 @@
+# FORECAST-SW v1.1
+
+FORECAST-SW v1.1 (ForeCarb v1.1) is the source revision prepared for the
+revised SoftwareX manuscript. It adds the audit and provenance features requested
+in peer review; the allometric equations, coefficients, carbon fractions and
+growth increments of the equation library are unchanged, and every value of the
+manuscript examples computed with v1.0 is reproduced.
+
+The release is tagged `v1.1`, which is the version cited in the manuscript; it does not include rebuilt v1.1 binaries. The documentation follows the manuscript: the source compilation defines the response of the 22 core equations as the dry weight of the whole individual (total biomass), and the planting-area defaults are based on crown widths measured in our young-tree and shrub sampling.
+
+## Fitted-range audit of growth scenarios
+
+- Every projected estimate is now labelled by the audit flag
+  `v_i(t) = 1 if D_min,i <= D_i(t) <= D_max,i else 0`
+  (`carbon_calculator/extrapolation.py`). The audit only labels estimates; it
+  never changes a trajectory.
+- The year-based plots draw estimates outside the fitted range with dotted
+  lines and open markers, shade the extrapolated part of the total, and print
+  the extrapolated share at year 30. A line above each plot reports, for the
+  selected year, the number of records outside their fitted range and the
+  extrapolated share of the tree or shrub stock and of the site total.
+- Records whose source publishes no fitted range are reported as not auditable
+  rather than being counted as within range.
+
+## Calculation details in the XLSX report
+
+- New sheet `Calculation_details` (`계산근거`): for each accepted inventory
+  record the equation ID, collection, library key, equation applied, predictor,
+  input value, predictor scaling, secondary input, biomass per individual,
+  carbon fraction, count, carbon stock, user changes to `a`, `b` or `CF`
+  (library value → value used), fitted range, growth setting, first year
+  outside the fitted range, and the status at year 30. Records excluded from
+  the calculation are listed with the reason. The sheet header records the
+  software version, the content fingerprint of the equation library, the site,
+  and the planting areas used by the safeguard.
+- New sheet `Fitted_range_audit` (`적합범위_점검`): year-by-year totals, the
+  carbon stock obtained by extrapolation, its share, and the flag of each record.
+- Equation IDs are the collection letter (T tree, S shrub, D domestic,
+  I international) followed by the position of the record in the library, for
+  example `T01` for *Pinus densiflora*. The entry dialog shows the ID.
+- Figures embedded in a report are rendered at a fixed size, so plots on tabs
+  that were never opened are no longer cramped.
+
+## Planting-area safeguard
+
+- The planting areas per tree and per shrub are user settings
+  (Settings > Planting-area safeguard). The defaults remain 1.00 and 0.25 m2,
+  the values are kept for later sessions, and the values in use are written to
+  the report. They never enter the biomass or carbon calculation.
+
+## Reproducible examples
+
+- `reproduce_examples.py` runs the example inventories of the manuscript
+  (the example workbook in `presets/`) through
+  the application code path without opening the GUI, prints the stocks at
+  years 0, 15 and 30 with the fitted-range audit, compares them with
+  `presets/expected_profiles.json`, and can write the XLSX reports.
+- `presets/example_report_Profile_1.xlsx` is the report that the application
+  writes for Profile 1.
+
+## Verification
+
+- 20 regression tests were added (`tests/test_fitted_range_audit.py`); the suite
+  now has 80 tests. For Profile 1 the tests fix the totals 198.89, 900.20 and
+  3,444.50 kg C at years 0, 15 and 30, the extrapolated share of 46.2 % at
+  year 30, and the first years outside the fitted range (*Rhododendron yedoense*
+  f. *poukhanense* 4, *Weigela subsessilis* 9, *Pinus densiflora* 30).
+
 # FORECAST-SW v1.0
 
 FORECAST-SW v1.0 is the first public, citable release evaluated in the accompanying

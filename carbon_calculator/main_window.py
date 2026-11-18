@@ -36,13 +36,10 @@ from .calculations import (
     CarbonRow, RangeViolation, calculate_carbon, project_future_carbon,
 )
 from .i18n import environment_name, species_name, tr
+from . import extrapolation
 from . import species_library as lib
 from .species_library import LibraryError, LibraryRecord
-from .input_limits import (
-    SHRUB_PLANTING_AREA_M2_PER_INDIVIDUAL,
-    TREE_PLANTING_AREA_M2_PER_INDIVIDUAL,
-    planting_area_budget,
-)
+from .input_limits import planting_area_budget
 from .version import __version__
 from .data import (
     DEFAULT_ENVIRONMENT, RESTORATION_ENVIRONMENTS, SpeciesData, shrub_species_for_env,
@@ -87,6 +84,14 @@ class _Entry:
     survival_annual: float = DEFAULT_SURVIVAL_PCT
     surv_factor: object = None  # 연차별 생존 비율 S0 × s^t
     surv_curve: object = None   # 생존률 반영 연도별 탄소저장량 (= curve × surv_factor)
+    # 적합범위 점검 — 연도별 설명변수 값, 범위 안 여부(범위 미제공이면 None),
+    # 범위를 처음 벗어나는 연차(벗어나지 않으면 None).
+    predictors: object = None
+    inside: object = None
+    first_outside: Optional[int] = None
+    # 계산 근거 — 라이브러리의 (a, b, CF) 와 사용자 변경 여부 (core 레코드만).
+    library_coeffs: Optional[Tuple[float, float, float]] = None
+    overridden: bool = False
 
     @property
     def supports_year_projection(self) -> bool:
@@ -112,6 +117,12 @@ _SEG_BUTTON_QSS = (
     " font-weight: bold; }"
     "QToolButton#segButton:disabled { color: #AAB3BA; background: #F4F6F8; }"
 )
+
+# Excel 에 넣는 그래프의 크기(인치)·해상도. 화면의 캔버스 크기와 무관하게 같은 비율로
+# 그려야 한다 — 한 번도 열지 않은 탭의 캔버스는 기본 크기라 범례가 그림을 덮는다.
+EXPORT_LINE_FIGSIZE = (13.5, 6.0)
+EXPORT_PIE_FIGSIZE = (8.0, 6.0)
+EXPORT_FIGURE_DPI = 120
 
 TEST_TREE_QUANTITY_RANGE = (3, 10)
 TEST_SHRUB_QUANTITY_RANGE = (3, 12)
@@ -362,6 +373,11 @@ class AddSpeciesDialog(QDialog):
         info_layout = QFormLayout(info_group)
         info_layout.setSpacing(6)
 
+        self.equation_id_label = QLabel("-")
+        self.equation_id_label.setToolTip(
+            tr("식 ID = 컬렉션(T 교목·S 관목·D 국내·I 국외) + 라이브러리 순번. Excel 보고서에 함께 기록됩니다."))
+        info_layout.addRow(tr("식 ID"), self.equation_id_label)
+
         self.range_value_label = QLabel("-")
         self.range_value_label.setWordWrap(True)
         info_layout.addRow(tr("적합 직경범위"), self.range_value_label)
@@ -488,6 +504,9 @@ class AddSpeciesDialog(QDialog):
                 self.diameter_spin.setValue(max(0.01, float(rec.range_min)))
 
         # 참고 정보 표시
+        code = lib.collection_code(rec)
+        self.equation_id_label.setText(
+            f"{lib.equation_id(species)}  ·  {lib.collection_label(code)}")
         self.range_value_label.setText(rec.range_text())
         if sp is not None:
             self.growth_value_label.setText(
@@ -834,6 +853,9 @@ class MainWindow(QMainWindow):
         self._shrub_total_cb: Optional[QCheckBox] = None
         self._carbon_price_per_tonne = 30000.0  # Assumed KRW per tonne of carbon (tC).
         self._displayed_total_carbon_kg = 0.0
+        # 마지막 계산에서 제외된 입력 행과 식재 면적 점검 결과 — Excel '계산근거' 시트에 기록.
+        self._excluded_rows: dict = {"tree": [], "shrub": []}
+        self._area_budget = None
 
         self._build_ui()
 
@@ -1373,8 +1395,9 @@ class MainWindow(QMainWindow):
     # ----- 동작 -----
 
     def on_calculate(self) -> None:
-        tree_entries, total_tree, tree_qty, w_tree = self._collect_entries("tree")
-        shrub_entries, total_shrub, shrub_qty, w_shrub = self._collect_entries("shrub")
+        excluded: dict = {"tree": [], "shrub": []}
+        tree_entries, total_tree, tree_qty, w_tree = self._collect_entries("tree", excluded["tree"])
+        shrub_entries, total_shrub, shrub_qty, w_shrub = self._collect_entries("shrub", excluded["shrub"])
 
         # Diameter-domain errors are reported before the site-area check.  The
         # calculation boundary repeats the range guard so invalid rows cannot
@@ -1410,20 +1433,22 @@ class MainWindow(QMainWindow):
                 ).format(
                     site_area=area_budget.site_area_m2,
                     tree_quantity=area_budget.tree_quantity,
-                    tree_unit_area=TREE_PLANTING_AREA_M2_PER_INDIVIDUAL,
+                    tree_unit_area=area_budget.tree_unit_area_m2,
                     tree_area=area_budget.tree_area_m2,
                     shrub_quantity=area_budget.shrub_quantity,
-                    shrub_unit_area=SHRUB_PLANTING_AREA_M2_PER_INDIVIDUAL,
+                    shrub_unit_area=area_budget.shrub_unit_area_m2,
                     shrub_area=area_budget.shrub_area_m2,
                     required_area=area_budget.required_area_m2,
                     excess_area=area_budget.excess_area_m2,
-                ),
+                ) + "\n" + tr("개체당 식재 면적은 [설정] → [식재 면적 입력 한도]에서 바꿀 수 있습니다."),
             )
             return
 
         # 다음 계산/저장에서 재사용할 수 있도록 캐시.
         self._tree_entries = tree_entries
         self._shrub_entries = shrub_entries
+        self._excluded_rows = excluded
+        self._area_budget = area_budget
 
         # 결과 테이블 + 핵심/확장 소계
         self._populate_table(self.tree_table, [self._entry_to_row(e) for e in tree_entries])
@@ -1475,6 +1500,8 @@ class MainWindow(QMainWindow):
         self._shrub_subtotal_label.setText("")
         self._tree_entries = []
         self._shrub_entries = []
+        self._excluded_rows = {"tree": [], "shrub": []}
+        self._area_budget = None
         self._tree_years = None
         self._shrub_years = None
         # 체크박스 범례 비우고 stretch 만 남김
@@ -1504,6 +1531,7 @@ class MainWindow(QMainWindow):
         for kind in ("tree", "shrub"):
             self._build_legend(kind, [], BASIS_DIAMETER)
             getattr(self, f"_{kind}_basis_note").clear()
+            getattr(self, f"_{kind}_basis_note").setVisible(False)
             getattr(self, f"_{kind}_diameter_basis_note").clear()
             getattr(self, f"{kind}_diameter_canvas").show_message(tr("계산 버튼을 눌러주세요"))
             getattr(self, f"{kind}_diameter_pie_canvas").show_message(tr("계산 버튼을 눌러주세요"))
@@ -1618,8 +1646,12 @@ class MainWindow(QMainWindow):
             "required_planting_area": budget.required_area_m2 if budget else 0.0,
         }
 
-    def _collect_entries(self, kind: str) -> Tuple[List[_Entry], float, int, List[str]]:
+    def _collect_entries(self, kind: str, excluded: Optional[list] = None
+                         ) -> Tuple[List[_Entry], float, int, List[str]]:
         """입력 행을 순회해 유효 행의 `_Entry` 리스트·합계·총 수량·경고 메시지를 반환.
+
+        `excluded` 리스트를 주면 계산에서 제외된 행(수량 0, 적합범위 밖, 식 평가 불가)을
+        사유와 함께 담아 준다 — Excel '계산근거' 시트의 제외 기록에 쓰인다.
 
         반환하는 `total_qty` 는 직경·계수 검증을 통과한 행의 전체 수량이며, 교목과 관목의
         합산 식재 면적을 대상지 면적과 비교하는 입력 보호 로직에 사용한다.
@@ -1639,21 +1671,32 @@ class MainWindow(QMainWindow):
         total = 0.0
         total_qty = 0
         warnings: List[str] = []
+        def _exclude(species_key, diameter, quantity, reason) -> None:
+            if excluded is not None:
+                excluded.append({"kind": kind, "species": species_key, "diameter": diameter,
+                                 "quantity": quantity, "reason": reason})
+
         for input_row in input_rows:
             species_key, diameter, quantity = input_row.values()
             if quantity <= 0:
+                _exclude(species_key, diameter, quantity, tr("수량이 0 이어서 제외"))
                 continue
             record = records.get(species_key)
             if record is None:
+                _exclude(species_key, diameter, quantity, tr("라이브러리에 없는 수종"))
                 continue
 
             # core 레코드는 행에 사용자 정의 (a, b, CF) 가 있으면 임시 SpeciesData 구성.
             species_data = record.species_data
+            library_coeffs = None
+            overridden = False
             if species_data is not None:
+                library_coeffs = (species_data.a, species_data.b, species_data.cf)
                 override = input_row.override_coeffs()
                 if override is not None:
                     a, b, cf = override
                     species_data = replace(species_data, a=a, b=b, cf=cf)
+                    overridden = True
                 record = replace(record, species_data=species_data)
 
             var2 = input_row.var2_value()
@@ -1663,6 +1706,7 @@ class MainWindow(QMainWindow):
                 project_record(record, diameter, quantity, var2)
             except LibraryError as e:
                 warnings.append(str(e))
+                _exclude(species_key, diameter, quantity, str(e))
                 continue
 
             total_qty += quantity
@@ -1672,6 +1716,7 @@ class MainWindow(QMainWindow):
                 diameter=diameter, quantity=quantity, carbon_kg=carbon_kg,
                 unit=("m" if record.predictor_short not in ("DBH", "RCD") else unit), var2=var2,
                 survival_initial=s0, survival_annual=s1,
+                library_coeffs=library_coeffs, overridden=overridden,
             ))
             total += carbon_kg
 
@@ -1747,6 +1792,7 @@ class MainWindow(QMainWindow):
                 marker.set_xdata([year, year])
                 getattr(self, f"{kind}_canvas").draw_idle()
         self._set_top_carbon_display(*totals, sum(totals), visualization_scale=True)
+        self._refresh_extrapolation_notes(year)
         self._refresh_survival_gauges(year)
         for kind in ("tree", "shrub"):
             marker = getattr(self, f"_{kind}_survival_marker", None)
@@ -1894,10 +1940,15 @@ class MainWindow(QMainWindow):
         """
         years_ref = None
         for e in entries:
-            years, _predictors, e.curve = project_record(
+            years, predictors, e.curve = project_record(
                 e.record, e.diameter, e.quantity, e.var2,
             )
             years_ref = years
+            # 적합범위 점검: 추정값은 바꾸지 않고, 연도별로 범위 안/밖만 표시한다.
+            e.predictors = predictors
+            e.inside = extrapolation.within_fitted_range(
+                e.record.range_min, e.record.range_max, predictors)
+            e.first_outside = extrapolation.first_year_outside(e.inside)
             # 생존률 반영: 탄소량은 개체 수에 비례하므로 전량 생존 곡선에 생존 비율을 곱한다.
             e.surv_factor = survival_factors(e.survival_initial, e.survival_annual, years)
             e.surv_curve = e.curve * e.surv_factor
@@ -1911,6 +1962,52 @@ class MainWindow(QMainWindow):
             self._tree_years = years_ref
         else:
             self._shrub_years = years_ref
+
+    # ----- 적합범위 점검 (외삽 비율) -----
+
+    def _extrapolation_summary(self, kind: Optional[str] = None
+                               ) -> extrapolation.ExtrapolationSummary:
+        """연도축 곡선의 적합범위 점검 요약. kind 를 주지 않으면 대상지 전체(교목+관목)."""
+        kinds = (kind,) if kind else ("tree", "shrub")
+        entries = [e for k in kinds for e in getattr(self, f"_{k}_entries")
+                   if e.curve is not None]
+        years = self._tree_years if self._tree_years is not None else self._shrub_years
+        return extrapolation.summarize(
+            [e.curve for e in entries], [e.inside for e in entries],
+            length=(len(years) if years is not None else 0))
+
+    def _refresh_extrapolation_notes(self, year: int) -> None:
+        """연도별 그래프 위 안내: 선택한 연차의 외삽 비율."""
+        site = self._extrapolation_summary()
+        for kind in ("tree", "shrub"):
+            note = getattr(self, f"_{kind}_basis_note", None)
+            if note is None:
+                continue
+            entries = [e for e in getattr(self, f"_{kind}_entries") if e.curve is not None]
+            parts: List[str] = []
+            if entries and year < len(site.total):
+                summary = self._extrapolation_summary(kind)
+                kind_label = tr("교목") if kind == "tree" else tr("관목")
+                outside_now = sum(1 for e in entries
+                                  if e.inside is not None and not bool(e.inside[year]))
+                first_years = [e.first_outside for e in entries if e.first_outside is not None]
+                if outside_now:
+                    parts.append(
+                        tr("{year}년: 적합범위 밖(외삽) 추정 {n}개 항목 — {kind} 저장량의 {share:.1f} %, "
+                           "대상지 전체의 {site:.1f} %")
+                        .format(year=year, n=outside_now, kind=kind_label,
+                                share=summary.share_at(year), site=site.share_at(year)))
+                elif first_years:
+                    parts.append(tr("{year}년: {kind} 추정이 모두 적합범위 안 (첫 외삽: {first}년)")
+                                 .format(year=year, kind=kind_label, first=min(first_years)))
+                    if site.extrapolated[year] > 0:
+                        parts.append(tr("대상지 전체 외삽 비율: {share:.1f} %")
+                                     .format(share=site.share_at(year)))
+                unassessed = sum(1 for e in entries if e.inside is None)
+                if unassessed:
+                    parts.append(tr("유효범위 미제공 {n}개 항목은 점검 불가").format(n=unassessed))
+            note.setText(" · ".join(parts))
+            note.setVisible(bool(parts))
 
     def _build_legend(self, kind: str, entries: List[_Entry], basis: str = BASIS_YEAR) -> None:
         """추정 그래프 위에 항목별 표시 체크박스 + '총 탄소저장량' 체크박스를 동적으로 구성.
@@ -1974,6 +2071,7 @@ class MainWindow(QMainWindow):
 
         setattr(self, f"_{kind}_year_marker", None)
         note.setText("")
+        note.setVisible(False)
         if not entries:
             canvas.show_message(tr("{kind} 정보 없음").format(kind=label_kr))
             return
@@ -1984,31 +2082,54 @@ class MainWindow(QMainWindow):
             return
 
         series: list = []
+        outside: list = []      # series 와 같은 순서 — 연도별 '적합범위 밖' 여부
         for e, cb in plottable:
             if cb.isChecked():
                 series.append((e.label, years, e.curve, False))
+                outside.append(None if e.inside is None else ~e.inside)
 
         # '총 탄소저장량' = 연도축에 그릴 수 있는 항목의 연도별 합.
         # 그릴 수 있는 항목이 1개뿐이면 개별 곡선과 같아지므로 합계는 생략한다.
+        summary = self._extrapolation_summary(kind)
+        extrapolated_part = None
         if total_cb is not None and total_cb.isChecked() and len(plottable) >= 2:
             summed = self._sum_carbon([e.curve for e, _cb in plottable])
             if summed is not None:
                 series.append((tr("총 탄소저장량"), years, summed, True))
+                outside.append(None)
+                extrapolated_part = summary.extrapolated
 
         if not series:
             canvas.show_message(
                 tr("{kind}: 표시할 항목을 선택하세요 (그래프 위 체크박스)").format(kind=label_kr))
             return
 
+        # 마지막 연차의 외삽 비율을 그래프 안에 적는다 (내보낸 그림에도 그대로 남는다).
+        final_year = int(years[-1])
+        extrapolation_note = None
+        if len(summary.total) and summary.extrapolated[-1] > 0:
+            extrapolation_note = (
+                tr("{year}년 외삽 비율: {share:.1f} %")
+                .format(year=final_year, share=summary.share_at(final_year)))
+        site_summary = self._extrapolation_summary()
+        if len(site_summary.total) and site_summary.extrapolated[-1] > 0:
+            site_note = tr("대상지 전체 외삽 비율: {share:.1f} %").format(
+                share=site_summary.share_at(final_year))
+            extrapolation_note = "\n".join(filter(None, (extrapolation_note, site_note)))
+
         # 제목은 패널 상단 라벨로 표시하므로 축 제목은 끈다 (그래프 영역 확보).
         canvas.plot_multi_projection(
             series,
             tr("[{kind}] 향후 30년 탄소저장량 변동 추정").format(kind=label_kr),
             show_title=False,
+            outside=outside,
+            extrapolated=extrapolated_part,
+            extrapolation_note=extrapolation_note,
         )
         marker = canvas.ax.axvline(self.year_slider.value(), color="#C0392B", linestyle="--")
         setattr(self, f"_{kind}_year_marker", marker)
         canvas.draw_idle()
+        self._refresh_extrapolation_notes(self.year_slider.value())
 
     def _render_diameter_projection(self, kind: str, canvas, entries: List[_Entry],
                                     checks: List[QCheckBox], total_cb, label_kr: str,
@@ -2133,21 +2254,37 @@ class MainWindow(QMainWindow):
     def _render_graph_images(self) -> list:
         """현재 4개 그래프(교목/관목 × 추정/기여도)를 PNG 바이트로 렌더 → Excel 임베드용."""
         specs = [
-            (tr("교목 향후 30년 탄소저장량 변동 추정"), self.tree_canvas),
-            (tr("교목 수종별 기여도"), self.tree_diameter_pie_canvas),
-            (tr("관목 향후 30년 탄소저장량 변동 추정"), self.shrub_canvas),
-            (tr("관목 수종별 기여도"), self.shrub_diameter_pie_canvas),
+            (tr("교목 향후 30년 탄소저장량 변동 추정"), self.tree_canvas, EXPORT_LINE_FIGSIZE),
+            (tr("교목 수종별 기여도"), self.tree_diameter_pie_canvas, EXPORT_PIE_FIGSIZE),
+            (tr("관목 향후 30년 탄소저장량 변동 추정"), self.shrub_canvas, EXPORT_LINE_FIGSIZE),
+            (tr("관목 수종별 기여도"), self.shrub_diameter_pie_canvas, EXPORT_PIE_FIGSIZE),
         ]
         images = []
-        for title, canvas in specs:
+        for title, canvas, figsize in specs:
             try:
-                buf = io.BytesIO()
-                # 그림은 constrained_layout 으로 이미 정돈됨(범례 포함). 그대로 PNG 저장.
-                canvas.figure.savefig(buf, format="png", dpi=150)
-                images.append({"title": title, "png": buf.getvalue()})
+                images.append({"title": title, "png": self.figure_png(canvas, figsize)})
             except Exception:  # noqa: BLE001 — 이미지 실패해도 나머지 저장은 진행
                 continue
         return images
+
+    @staticmethod
+    def figure_png(canvas, figsize, dpi: int = EXPORT_FIGURE_DPI) -> bytes:
+        """캔버스의 그림을 정해진 크기로 PNG 로 렌더한다 (화면 크기는 그대로 둔다).
+
+        화면의 캔버스는 창 배치에 따라 크기가 제각각이고, 한 번도 열지 않은 탭은
+        기본 크기로 남아 있어 그대로 저장하면 범례가 그림 영역을 덮는다. 저장하는
+        동안만 그림 크기를 바꾸고 constrained_layout 으로 다시 배치한 뒤 되돌린다.
+        """
+        figure = canvas.figure
+        original = tuple(figure.get_size_inches())
+        buf = io.BytesIO()
+        try:
+            figure.set_size_inches(figsize, forward=False)
+            figure.savefig(buf, format="png", dpi=dpi)
+        finally:
+            figure.set_size_inches(original, forward=False)
+            canvas.draw_idle()
+        return buf.getvalue()
 
     def build_export_payload(self):
         """공개 래퍼: 계산 결과가 없으면 None, 있으면 export payload dict를 반환."""
@@ -2155,12 +2292,43 @@ class MainWindow(QMainWindow):
             return None
         return self._build_export_payload()
 
+    @staticmethod
+    def _audit_payload(years, summary: extrapolation.ExtrapolationSummary) -> Optional[dict]:
+        """적합범위 점검 요약을 Excel 용 순수 리스트로 바꾼다."""
+        if years is None or not len(summary.total):
+            return None
+        return {
+            "years": [int(y) for y in years],
+            "total": [float(x) for x in summary.total],
+            "extrapolated": [float(x) for x in summary.extrapolated],
+            "unassessed": [float(x) for x in summary.unassessed],
+            "share": [float(x) for x in summary.share_pct],
+        }
+
     def _build_export_payload(self) -> dict:
         total_tree = sum(e.carbon_kg for e in self._tree_entries)
         total_shrub = sum(e.carbon_kg for e in self._shrub_entries)
+        years = self._tree_years if self._tree_years is not None else self._shrub_years
+        budget = self._area_budget or planting_area_budget(
+            area_w=self.area_w, area_h=self.area_h,
+            tree_quantity=sum(e.quantity for e in self._tree_entries),
+            shrub_quantity=sum(e.quantity for e in self._shrub_entries),
+        )
         return {
             "generated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "grand_total": total_tree + total_shrub,
+            # 계산 근거 — 소프트웨어 판, 식 라이브러리 지문, 식재 면적 점검에 쓴 값.
+            "software": {"name": "ForeCarb", "version": __version__},
+            "library": lib.library_identity(),
+            "planting_area": None if budget is None else {
+                "tree_unit": budget.tree_unit_area_m2,
+                "shrub_unit": budget.shrub_unit_area_m2,
+                "tree_quantity": budget.tree_quantity,
+                "shrub_quantity": budget.shrub_quantity,
+                "required": budget.required_area_m2,
+                "site": budget.site_area_m2,
+            },
+            "audit": self._audit_payload(years, self._extrapolation_summary()),
             "region": {
                 "name": self.region_name,
                 "environment": self.environment,
@@ -2197,6 +2365,23 @@ class MainWindow(QMainWindow):
                 "growth_assumption": assumption_note(e.record),
                 "survival_initial": e.survival_initial,
                 "survival_annual": e.survival_annual,
+                # ── 계산 근거 (Excel '계산근거' 시트) ──
+                "equation_id": lib.equation_id(e.species),
+                "collection": lib.collection_code(e.record),
+                "predictor": e.record.var1_label,
+                "formula": e.record.formula_text().split("      ")[0],
+                "unit_scale": (e.species_data.equation_diameter_scale if e.species_data else 1.0),
+                "library_a": (e.library_coeffs[0] if e.library_coeffs else None),
+                "library_b": (e.library_coeffs[1] if e.library_coeffs else None),
+                "library_cf": (e.library_coeffs[2] if e.library_coeffs else lib.CARBON_FACTOR),
+                "overridden": e.overridden,
+                "var2": e.var2, "var2_label": e.record.var2_label,
+                "growth": ((e.species_data.growth_y10, e.species_data.growth_y20,
+                            e.species_data.growth_y21) if e.species_data else None),
+                "first_outside": e.first_outside,
+                "final_predictor": (float(e.predictors[-1]) if e.predictors is not None else None),
+                "final_carbon": (float(e.curve[-1]) if e.curve is not None else None),
+                "inside": (None if e.inside is None else [bool(x) for x in e.inside]),
             }
             for i, e in enumerate(entries)
         ]
@@ -2249,4 +2434,6 @@ class MainWindow(QMainWindow):
             "unit": unit, "total": total, "total_qty": total_qty,
             "rows": rows, "projection": projection, "contribution": contribution,
             "survival": survival,
+            "excluded": [dict(x) for x in self._excluded_rows.get(kind, [])],
+            "audit": self._audit_payload(years, self._extrapolation_summary(kind)),
         }

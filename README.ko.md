@@ -6,20 +6,20 @@
 
 ForeCarb는 산림복원지의 교목·관목 혼합 인벤토리를 대상으로 살아 있는 식생의 바이오매스 탄소저장량을 평가하는 Windows용 오픈소스 데스크톱 프로그램이다. 상대생장식 관리, 단위 일관성을 유지하는 계산, 대상지 간 비교, **30년 범위의 결정론적 성장 시나리오**, 3D 시각화, XLSX 보고 기능을 통합한다.
 
-이 문서는 ForeCarb v1.0과 함께 제공되는 논문 원고를 기준으로 작성했다. 그림 번호와 표 1–3은 논문과 일치하며, 설치·빌드·저장소 사용 안내도 함께 제공한다.
+이 문서는 ForeCarb v1.1과 함께 제공되는 논문 원고를 기준으로 작성했다. Figure 1–7과 표 1–5는 논문과 일치하며, 설치·빌드·저장소 사용 안내도 함께 제공한다.
 
 #### 코드 메타데이터 (Code metadata)
 
 | Nr | 항목 | 내용 |
 |:---:|---|---|
-| C1 | 현재 코드 버전 | ForeCarb v1.0 |
-| C2 | 코드 저장소 영구 링크 | [ForeCarb 저장소](https://github.com/ISW-LAB/ForeCarb) |
+| C1 | 현재 코드 버전 | v1.1 |
+| C2 | 이 코드 버전의 저장소 영구 링크 | https://github.com/ISW-LAB/ForeCarb/tree/v1.1 (식 라이브러리: [`species_data.json`](species_data.json)) |
 | C3 | 재현 캡슐 영구 링크 | 해당 없음 |
 | C4 | 코드 라이선스 | [MIT](LICENSE); `species_data.json` 은 [공공누리 제1유형](DATA_LICENSE.md) |
 | C5 | 버전 관리 시스템 | Git |
 | C6 | 사용 언어·도구·서비스 | Python, PyQt5, NumPy, Matplotlib, openpyxl, Pillow, PyVista/VTK, PyInstaller, Inno Setup |
-| C7 | 컴파일 요구사항·OS·의존성 | Windows 10/11; Python ≥ 3.10; [`requirements.txt`](requirements.txt) 참조 |
-| C8 | 개발자 문서·매뉴얼 | English: [README.en.md](README.en.md); Korean: [README.ko.md](README.ko.md); 사용자 매뉴얼(PDF): [탄소저장량_예측프로그램_사용자매뉴얼.pdf](docs/탄소저장량_예측프로그램_사용자매뉴얼.pdf) |
+| C7 | 컴파일 요구사항·OS·의존성 | Microsoft Windows 10/11 (64-bit); Python ≥ 3.10; `pip install -r requirements.txt`; `python main.py --lang ko` |
+| C8 | 개발자 문서·매뉴얼 | [README.en.md](README.en.md) (English); [README.ko.md](README.ko.md) (Korean); 재현 예시: [`reproduce_examples.py`](reproduce_examples.py) |
 | C9 | 문의 이메일 | [kc.jeong-isw@cbnu.ac.kr](mailto:kc.jeong-isw@cbnu.ac.kr); [gc.jo-isw@cbnu.ac.kr](mailto:gc.jo-isw@cbnu.ac.kr) |
 
 [1. 구조](#1-구조와-워크플로) · [2. 상대생장식 라이브러리](#2-상대생장식-라이브러리) · [3. 계산](#3-계산) · [4. 적용 예시](#4-적용-예시) · [5. 설치](#5-설치와-실행) · [6. 편집·배포](#6-상대생장식-편집과-배포) · [7. 빌드](#7-빌드) · [8. 테스트](#8-테스트) · [9. 구조](#9-저장소-구조) · [10. 인용](#10-인용) · [11. 라이선스](#11-라이선스)
@@ -31,7 +31,7 @@ ForeCarb는 산림복원지의 교목·관목 혼합 인벤토리를 대상으�
 
 ## 1. 구조와 워크플로
 
-Windows용 Python + PyQt5 구현. NumPy(계산), Matplotlib(2D 그래프), openpyxl(XLSX), PyVista/VTK(선택적 3D). 한국어·영어 인터페이스는 동일한 계산 서비스를 사용하며, 패키징된 프로그램은 별도 Python 설치 없이 실행된다.
+Microsoft Windows 10/11용 Python + PyQt5 구현. NumPy(계산), Matplotlib(2D 그래프), openpyxl(XLSX), PyVista/VTK(선택적 3D). 한국어·영어 인터페이스는 동일한 계산 서비스를 사용하며, 패키징된 프로그램은 별도 Python 설치 없이 실행된다.
 
 <p align="center">
   <img src="figures/paper/fig1_workflow.png" alt="ForeCarb의 소프트웨어 구조와 8단계 워크플로" width="100%">
@@ -54,7 +54,7 @@ Windows용 Python + PyQt5 구현. NumPy(계산), Matplotlib(2D 그래프), openp
 
 ## 2. 상대생장식 라이브러리
 
-**77개 레코드 · 학명 67종.** 교목·관목의 핵심 컬렉션에는 연구진이 국내 산림복원지에서 바이오매스를 직접 측정해 개발한 식 22개가 포함된다. 국내·국외 확장 컬렉션의 식 55개는 기존 문헌에서 수집한 것이다. 원 연구의 지역·임분 조건·바이오매스 구성요소가 다르면 같은 수종이라도 레코드를 분리해 보존한다 — 예: *Pinus thunbergii*(곰솔)는 **4개 레코드**.
+**77개 레코드 · 학명 67종.** 교목·관목의 핵심 컬렉션에는 2025년 과제 보고서에서 복원지 연구와 지원 문헌을 종합한 핵심 식 레코드 22개가 포함된다. 국내·국외 확장 컬렉션의 식 55개는 기존 문헌에서 수집한 것이다. 원 연구의 지역·임분 조건·바이오매스 구성요소가 다르면 같은 수종이라도 레코드를 분리해 보존한다 — 예: *Pinus thunbergii*(곰솔)는 **4개 레코드**.
 
 77개 레코드 전부를 대상지 평가 화면에서 선택할 수 있다. 각 레코드는 **예측변수**를 기준으로 교목/관목 입력 탭에 배치된다 — 변수가 RCD 인 레코드는 관목, 그 외는 교목이며 결과적으로 **교목 59개 · 관목 18개**다.
 
@@ -66,37 +66,81 @@ Windows용 Python + PyQt5 구현. NumPy(계산), Matplotlib(2D 그래프), openp
 | 국외 `FOREIGN_SPECIES` | **25** | DBH · RCD · 수고 (+ 수고·LAI·길이) | 수식 문자열 + 범위 | ✅ | 직경별 |
 | **합계** | **77** | | | **77** | **직경별 77 · 연도별 22** |
 
-#### 표 1. ForeCarb 교목·관목 컬렉션의 대표 상대생장식 레코드 — 예측변수 정의, 적합 직경범위, 기간별 생장량
+#### 표 1. 핵심 레코드 22개의 상대생장식 (ID는 프로그램과 XLSX 보고서의 표기와 같다)
 
-| 학명 | 상대생장식 | 예측변수 | 적합범위 | 1–10 | 11–20 | 21–30 | Reference |
-|---|---|:---:|:---:|---:|---:|---:|---|
-| ***교목 컬렉션*** | | | | | | | |
-| *Pinus densiflora* | `Y = 0.0737·X^2.5735` | DBH | 1–15 cm | 0.11 | 0.20 | 0.70 | [23](#ref-23), [24](#ref-24) |
-| *Pinus thunbergii* | `Y = 0.0679·X^2.5770` | DBH | 1–29 cm | 0.24 | 0.32 | 0.32 | [23](#ref-23), [25](#ref-25) |
-| *Chamaecyparis obtusa* | `Y = 0.3617·X^2.0450` | DBH | 1–50 cm | 0.11 | 0.23 | 0.23 | [23](#ref-23), [25](#ref-25) |
-| *Quercus serrata* | `Y = 0.2002·X^2.3767` | DBH | 1–30 cm | 0.13 | 0.30 | 0.30 | [23](#ref-23), [25](#ref-25) |
-| *Quercus mongolica* | `Y = 0.0147·X^3.1075` | DBH | 6–30 cm | 0.40 | 0.40 | 0.40 | [24](#ref-24), [25](#ref-25) |
-| ***관목 컬렉션*** | | | | | | | |
-| *Euonymus japonicus* | `Y = 0.0002·(10X)^2.5` | RCD | 0.6–5.3 cm | 0.30 | 0.22 | 0.22 | [26](#ref-26) |
-| *Rhododendron yedoense* | `Y = 0.0003·(10X)^2.4` | RCD | 0.1–2.2 cm | 0.31 | 0.17 | 0.17 | [26](#ref-26) |
-| *Euonymus alatus* | `Y = 0.000022·(10X)^2.55` | RCD | 1.1–6.7 cm | 0.38 | 0.25 | 0.25 | [26](#ref-26) |
-| *Lespedeza bicolor* | `Y = 0.00015·(10X)^2.8` | RCD | 0.2–1.7 cm | 0.10 | 0.06 | 0.06 | [23](#ref-23) |
-| *Weigela subsessilis* | `Y = 0.00029·(10X)^2.4` | RCD | 0.6–3.9 cm | 0.30 | 0.24 | 0.24 | [27](#ref-27) |
+| ID | 학명 | 상대생장식 | 예측변수 | 적합범위 (cm) |
+|:---:|---|---|:---:|:---:|
+| ***교목 컬렉션*** | | | | |
+| T01 | *Pinus densiflora* | `Y = 0.0737·X^2.5735` | DBH | 1–15 |
+| T02 | *Pinus thunbergii* | `Y = 0.0679·X^2.5770` | DBH | 1–29 |
+| T03 | *Chamaecyparis obtusa* | `Y = 0.3617·X^2.0450` | DBH | 1–50 |
+| T04 | *Quercus serrata* | `Y = 0.2002·X^2.3767` | DBH | 1–30 |
+| T05 | *Robinia pseudoacacia* | `Y = 0.1391·X^2.5016` | DBH | 1–30 |
+| T06 | *Quercus acuta* | `Y = 0.1926·X^2.4300` | DBH | 1–40 |
+| T07 | *Quercus mongolica* | `Y = 0.0147·X^3.1075` | DBH | 6–30 |
+| ***관목 컬렉션*** | | | | |
+| S01 | *Euonymus japonicus* | `Y = 0.0002·(10X)^2.5` | RCD | 0.6–5.3 |
+| S02 | *Rhododendron yedoense* f. *poukhanense* | `Y = 0.0003·(10X)^2.4` | RCD | 0.1–2.2 |
+| S03 | *Spiraea prunifolia* | `Y = 0.00025·(10X)^2.6` | RCD | 0.5–4.4 |
+| S04 | *Euonymus alatus* | `Y = 0.000022·(10X)^2.55` | RCD | 1.1–6.7 |
+| S05 | *Buxus sinica* var. *insularis* | `Y = 0.000018·(10X)^2.7` | RCD | 0.8–3.0 |
+| S06 | *Forsythia koreana* | `Y = 0.00028·(10X)^2.45` | RCD | 0.4–2.6 |
+| S07 | *Nandina domestica* | `Y = 0.00031·(10X)^2.3` | RCD | 0.4–3.5 |
+| S08 | *Viburnum erosum* | `Y = 0.00026·(10X)^2.5` | RCD | 0.7–3.9 |
+| S09 | *Deutzia parviflora* | `Y = 0.00023·(10X)^2.6` | RCD | 0.4–2.5 |
+| S10 | *Weigela subsessilis* | `Y = 0.00029·(10X)^2.4` | RCD | 0.6–3.9 |
+| S11 | *Lespedeza bicolor* | `Y = 0.00015·(10X)^2.8` | RCD | 0.2–1.7 |
+| S12 | *Syringa oblata* var. *dilatata* | `Y = 0.00005·(10X)^2.64` | RCD | 0.5–2.9 |
+| S13 | *Callicarpa dichotoma* | `Y = 0.0021·(10X)^2.65` | RCD | 0.7–2.5 |
+| S14 | *Ligustrum obtusifolium* | `Y = 0.00019·(10X)^2.75` | RCD | 0.4–3.5 |
+| S15 | *Cornus alba* | `Y = 0.00027·(10X)^2.52` | RCD | 0.7–5.2 |
 
-Reference 열은 논문과 동일하게 지원 보고서 및 수식 데이터베이스에 제시된 상대생장식의 출처를 표시한다. 서지정보는 [상대생장식 출처](#상대생장식-출처)에 정리했다. 생장량은 별도로 설정하는 파라미터이며, 참고문헌 연결은 논문의 상대생장식 출처 표기를 따른다.
+<sub>`X`: DBH 또는 RCD (cm); `Y`: 개체 전체 바이오매스 (kg).</sub>
 
-- 1–10, 11–20, 21–30 열은 각 기간의 연간 직경 생장량(cm yr⁻¹). **0 = 해당 기간에 직경 생장을 두지 않음.**
+#### 표 2. 핵심 레코드 22개의 입력값과 출처
+
+| ID | 학명 | CF | g1 / g2 / g3 | 출처 번호 |
+|:---:|---|:---:|:---:|:---:|
+| T01 | *Pinus densiflora* | 0.50 | 0.11 / 0.20 / 0.70 | 2, 4 |
+| T02 | *Pinus thunbergii* | 0.50 | 0.24 / 0.32 / 0.32 | 2, 7 |
+| T03 | *Chamaecyparis obtusa* | 0.50 | 0.11 / 0.23 / 0.23 | 2, 7 |
+| T04 | *Quercus serrata* | 0.50 | 0.13 / 0.30 / 0.30 | 2, 7 |
+| T05 | *Robinia pseudoacacia* | 0.50 | 0.14 / 0.20 / 0.20 | 2, 7 |
+| T06 | *Quercus acuta* | 0.50 | 0.12 / 0.16 / 0.16 | 2, 7 |
+| T07 | *Quercus mongolica* | 0.50 | 0.40 / 0.40 / 0.40 | 4, 7 |
+| S01 | *Euonymus japonicus* | 0.50 | 0.30 / 0.22 / 0.22 | 6 |
+| S02 | *Rhododendron yedoense* f. *poukhanense* | 0.50 | 0.31 / 0.17 / 0.17 | 6 |
+| S03 | *Spiraea prunifolia* | 0.50 | 0.20 / 0.14 / 0.14 | 6 |
+| S04 | *Euonymus alatus* | 0.50 | 0.38 / 0.25 / 0.25 | 6 |
+| S05 | *Buxus sinica* var. *insularis* | 0.50 | 0.24 / 0.17 / 0.17 | 6 |
+| S06 | *Forsythia koreana* | 0.50 | 0.16 / 0.16 / 0.16 | 3 |
+| S07 | *Nandina domestica* | 0.50 | 0.24 / 0.22 / 0.22 | 5 |
+| S08 | *Viburnum erosum* | 0.50 | 0.35 / 0.00 / 0.00 | 2 |
+| S09 | *Deutzia parviflora* | 0.50 | 0.30 / 0.00 / 0.00 | 2 |
+| S10 | *Weigela subsessilis* | 0.50 | 0.30 / 0.24 / 0.24 | 5 |
+| S11 | *Lespedeza bicolor* | 0.50 | 0.10 / 0.06 / 0.06 | 2 |
+| S12 | *Syringa oblata* var. *dilatata* | 0.45 | 0.25 / 0.23 / 0.23 | 3 |
+| S13 | *Callicarpa dichotoma* | 0.50 | 0.24 / 0.16 / 0.16 | 5 |
+| S14 | *Ligustrum obtusifolium* | 0.50 | 0.18 / 0.21 / 0.21 | 5 |
+| S15 | *Cornus alba* | 0.50 | 0.29 / 0.26 / 0.26 | 5 |
+
+<sub>CF: 탄소계수; `g1 / g2 / g3`: 1–10, 11–20, 21–30년의 연간 직경 생장량 (cm/년). CF와 `g`는 소프트웨어 입력값이다.</sub>
+
+출처 번호는 2025년 과제 보고서의 목록을 따른다: 1, 복원지 교목 상대생장식(NIFoS, 2024); 2, 어린나무 상대생장식 [28]; 3, 정원·도시숲 관목 계수(KOAGI, 2024); 4, 복원지 참나무류 상대생장식 [29]; 5–6, 도시 생물다양성 연구 [32, 31]; 7, 주요 수종 바이오매스 계수 [30]. T01에는 산불피해지 인공복원(`0.0722·X^2.6044`, 1–22 cm, 출처 2/4)과 채석장(`0.1323·X^2.2619`, 1–25 cm, 출처 1/2) 식도 저장되어 있다. 서지정보는 [상대생장식 출처](#상대생장식-출처)에 정리했다.
+
+- `g1 / g2 / g3`는 1–10, 11–20, 21–30년의 연간 직경 생장량(cm yr⁻¹). **0 = 해당 기간에 직경 생장을 두지 않음.**
 - `X` 는 교목 DBH, 관목 RCD (cm). mm로 적합된 관목식은 **`10X`** 로 쓰고 적합 한계를 cm로 환산 — 원 관계식을 재적합 없이 보존한다.
 - **수종마다 대상지 3종의 레코드를 각각 보유**하며, 프로그램은 선택된 대상지의 레코드 하나만 적용한다 — 대상지 공통 '기본식' 개념은 없다 (`SiteCategoryTests`). 네 컬렉션 모두 같은 `by_env` 구조를 쓴다.
 - 출처가 실제로 구분하는 수종은 값이 다르다: *Pinus densiflora*(소나무)는 시트 순번 1 / 2 / 3 을 세 대상지에 각각 쓴다. 나머지 수종은 세 대상지가 같은 값으로 초기화되어 있고, 근거가 확보되는 대로 Manager 에서 나누어 넣을 수 있다.
 - **연 직경 생장량 보정계수**가 선택된 레코드의 성장량에 추가로 곱해진다. **대상지 3종 × 생장 티어 1·2·3 = 9개**이며 기본값은 `1.0`(보정 없음)이다. 수종마다 대상지별 티어를 지정하고(기본 티어 1), 생장량이 없는 확장 레코드는 가정 생장률 2 %에 같은 계수를 곱한다. 수종별 예외를 입력하면 그 값이 우선한다. 30년 시나리오만 조정하고 식은 그대로이므로 0년차 저장량은 변하지 않는다. 대상지 × 교목/관목(6개) 형식의 이전 파일은 티어 1·2로 읽는다.
+- **식 ID.** 레코드마다 컬렉션 문자(`T` 교목, `S` 관목, `D` 국내, `I` 국외)와 라이브러리 순번으로 된 ID 가 있다: `T01`–`T07`, `S01`–`S15`, `D01`–`D30`, `I01`–`I25` (예: `T01` 소나무, `S10` 병꽃나무, `D21`–`D23` 곰솔 문헌식 3건). 입력 대화상자에 ID 가 표시되고 XLSX 보고서에 행마다 기록된다.
 - 전체 목록: [`species_data.json`](species_data.json).
 
 #### 그래프 기준
 
 추정 패널은 탭마다 x축 기준을 선택해 탄소저장량을 표현한다:
 
-- **연도별** — 핵심 교목·관목 **22개 레코드**의 기간별 직경 생장량을 적용한 0–30년 결정론적 시나리오다. 국내·국외 55개 레코드는 생장량이 저장되어 있지 않아 논문에서 다루는 결정론적 성장 시나리오 분석에서 제외된다.
+- **연도별** — 핵심 교목·관목 **22개 레코드**의 기간별 직경 생장량을 적용한 0–30년 결정론적 시나리오다. 국내·국외 55개 레코드는 기간별 생장량이 없어 첫 번째 설명변수에 연 2% 증가를 가정하는 탐색적 시나리오를 제공한다. 이는 실측 생장률이 아니다.
 - **직경별** — 예측변수 축에 대한 탄소저장량으로 **77개 전체**를 지원한다. 각 곡선은 해당 레코드의 적합범위를 훑고, 출처가 정의역을 주지 않은 **20개** 레코드는 입력값 주변 구간만 그린 뒤 그 사실을 표시한다. 레코드마다 정의역이 달라 이 기준에서는 합계 곡선을 제공하지 않는다.
 
 확장 컬렉션 레코드도 대상지 합계, 식재면적 검증(개체당 면적은 수종별이 아니라 생장형별로 정의됨), Excel 내보내기에 포함된다. 결과 표 아래에는 핵심/확장 소계를 따로 표시해 22개 레코드 기준 수치를 그대로 확인할 수 있다. 논문의 3D 성장 예시는 핵심 컬렉션의 연도별 시나리오와 동일한 직경 생장량을 사용한다.
@@ -110,7 +154,8 @@ B_i(t)    = a_i · [ q_i · D_i(t) ]^b_i
 C_i(t)    = B_i(t) · CF_i · n_i                                        … Eq. (1)
 C_site(t) = Σ C_i(t)        i ∈ V (검증을 통과한 레코드)
 
-A_required = 1.00 · Σ n_i(교목) + 0.25 · Σ n_i(관목)                     … Eq. (2)
+A_required = α_교목 · Σ n_i(교목) + α_관목 · Σ n_i(관목)                 … Eq. (2)
+             기본값 α_교목 = 1.00 m², α_관목 = 0.25 m² (개체당)
              → A_required > A_site 이면 계산 중단
 
 ρ_C(t) = C_site(t) / A_site                                            … Eq. (3)
@@ -131,8 +176,9 @@ v_i(t) = D_min,i ≤ D_i(t) ≤ D_max,i 이면 1, 아니면 0                   
 - Eq. (1)은 레코드를 **개별 합산**하므로 멱함수의 비선형성이 대상지 총량에 보존된다.
 - `q_i` 는 식 레코드의 속성이라 재정의(`a_i`, `b_i`, `CF_i`)로 바뀌지 않는다.
 - Eq. (3): 총 저장량은 **대상지 면적과 무관**, 탄소밀도만 면적에 **반비례**.
-- Eq. (5)는 계산 **이후**에 수행되며 외삽 여부만 표시할 뿐 궤적을 바꾸지 않는다.
-- 국내·국외 레코드는 `Y_i = f_i(X_i, H_i)` 형태로 AST 허용목록을 통해 평가한다(Python `eval` 미사용). 탄소계수·생장량을 저장하지 않으므로 **고정 CF₀ = 0.5** 를 적용한다. 논문에서 다루는 결정론적 성장 시나리오 분석에서는 제외되며, 직경별 그래프는 제공한다.
+- Eq. (2): `α_교목`·`α_관목` 은 사용자 설정이다(**설정 → 식재 면적 입력 한도**; 다음 실행에도 유지되고 보고서에 기록된다). 기본값은 1 m × 1 m, 0.5 m × 0.5 m 식재 간격에 해당한다. 계산을 진행할지만 결정하며 바이오매스·탄소 계산에는 관여하지 않는다.
+- Eq. (5)는 계산 **이후**에 수행되며 외삽 여부만 표시할 뿐 궤적을 바꾸지 않는다. 연도별 그래프는 적합범위 밖 추정을 점선·빈 표식으로 그리고 합계 중 외삽분을 음영으로 표시하며 30년 외삽 비율을 적는다. 그래프 위 안내 줄은 선택한 연차의 비율을 보여 준다. XLSX 보고서는 레코드별로 범위를 처음 벗어나는 연차(`계산근거`)와 연도별 외삽 탄소량·비율(`적합범위_점검`)을 기록한다. 출처가 적합범위를 주지 않은 레코드는 '점검 불가'로 따로 표시한다.
+- 국내·국외 레코드는 `Y_i = f_i(X_i, H_i)` 형태로 AST 허용목록을 통해 평가한다(Python `eval` 미사용). 탄소계수·생장량을 저장하지 않으므로 **고정 CF₀ = 0.5** 를 적용한다. 기간별 생장량을 사용하는 핵심 식과 달리, 탐색용 시나리오에는 첫 번째 설명변수의 연 2% 증가 가정을 적용한다. 이는 실측 수종별 생장률이 아니다.
 
 #### 생존률 반영 결과 (선택)
 
@@ -169,7 +215,7 @@ Manager는 4개 컬렉션의 레코드를 관리한다. Figure 2의 화면은 �
   <img src="figures/paper/fig3_assessment_workflow.png" alt="프로파일 1의 통합 평가 워크플로" width="100%">
 </p>
 
-> **Figure 3.** 교목·관목 혼합 인벤토리 평가, 상대생장식 확인, 탄소저장량 분석, 3D 시각화를 포함한 프로파일 1의 통합 평가 워크플로.
+> **Figure 3.** 15년차의 프로파일 1 대시보드(상단, 900.20 kg C 표시; 0년차 198.89 kg C); (a) 선택한 식과 수정 가능한 파라미터를 보여 주는 입력 창; (b) 궤적과 수종별 기여도; (c) 모의 3D 임분.
 
 프로파일 1 — 20 m × 20 m 대상지에 교목 3종·관목 2종.
 
@@ -179,7 +225,7 @@ Manager는 4개 컬렉션의 레코드를 관리한다. Figure 2의 화면은 �
 
 **인벤토리 구성**에 따른 변동과 **면적 정규화**로 생기는 변동을 분리하도록 설계했다.
 
-#### 표 2. Figure 4의 대상지 간 비교에 사용한 통제 인벤토리와 산출값
+#### 표 3. Figure 4의 대상지 간 비교에 사용한 통제 인벤토리와 산출값
 
 | 비교 | 프로파일 | 대상지 면적 (m²) | 교목 레코드 | 관목 레코드 | 저장량 (kg C) | 밀도 (kg C m⁻²) |
 |---|:---:|:---:|---|---|---:|---:|
@@ -203,24 +249,31 @@ Manager는 4개 컬렉션의 레코드를 관리한다. Figure 2의 화면은 �
 
 ### 4.4 결정론적 성장 시나리오
 
-<p align="center">
-  <img src="figures/paper/fig5_growth_scenario.png" alt="프로파일 1의 결정론적 성장 시나리오" width="100%">
-</p>
-
 지정된 직경 생장량이 시간에 따른 탄소저장량 변화로 이어지는 과정을 보여준다. 프로파일 1의 총 탄소저장량은 **0년차 198.89 kg C**에서 **30년차 3,444.50 kg C**로 증가한다.
 
-> **Figure 5.** **(a) 0년차**와 **(b) 30년차**의 교목·관목·총 탄소저장량 및 해당 3D 임분 시각화를 보여주는 프로파일 1의 결정론적 성장 시나리오.
+<p align="center">
+  <img src="figures/paper/fig5_trajectories.png" alt="외삽 추정을 표시한 프로파일 1의 교목·관목 궤적" width="100%">
+</p>
 
-| 연차 | 교목 (kg C) | 관목 (kg C) | **총계 (kg C)** |
-|:---:|---:|---:|---:|
-| 0 | 194.15 | 4.74 | **198.89** |
-| 30 | 3,050.16 | 394.34 | **3,444.50** |
+> **Figure 5.** 프로파일 1의 (a) 교목 및 (b) 관목 궤적. 점선·빈 표식은 외삽을 나타내고 음영은 합계 중 외삽분이다. 30년차 외삽 비율: 교목 39.2%, 관목 100%, 대상지 전체 46.2%.
 
-30년차 값에는 투영 직경이 적합범위를 벗어난 **외삽 추정치**가 포함될 수 있다. 3D 뷰는 소프트웨어가 정의한 시나리오 형상이며 실측 수관 구조가 아니다.
+<p align="center">
+  <img src="figures/paper/fig6_growth_3d.png" alt="프로파일 1의 0, 15, 30년차 모의 3D 임분" width="100%">
+</p>
+
+> **Figure 6.** 프로파일 1의 0년차 (a), 15년차 (b), 30년차 (c) 모의 3D 임분. 같은 축척으로 그렸으며 대상지 합계와 외삽 비율을 함께 표시한다. 형상은 소프트웨어가 정의한 것이다.
+
+| 연차 | 교목 (kg C) | 관목 (kg C) | **총계 (kg C)** | 외삽 비율 |
+|:---:|---:|---:|---:|---:|
+| 0 | 194.15 | 4.74 | **198.89** | 0.0 % |
+| 15 | 763.85 | 136.35 | **900.20** | 15.1 % |
+| 30 | 3,050.16 | 394.34 | **3,444.50** | 46.2 % |
+
+**외삽 비율.** 초기 직경 검증은 0년차에만 적용되므로 투영 직경은 적합범위를 벗어날 수 있다. Profile 1 에서는 다섯 레코드 중 셋이 벗어난다 — 산철쭉은 4년차부터(2.44 cm > 2.2 cm), 병꽃나무는 9년차부터(4.20 cm > 3.9 cm), 소나무는 30년차에(15.1 cm > 15 cm). 적합범위 밖 추정은 **15년차 총량의 15.1 %**(900.20 중 136.35 kg C), **30년차 총량의 46.2 %**(3,444.50 중 1,590.13 kg C; 교목 저장량의 39.2 %, 관목 저장량의 100 %)를 차지한다. 프로그램은 이 비율을 그래프와 XLSX 보고서에 표시한다. 3D 뷰는 소프트웨어가 정의한 시나리오 형상이며 실측 수관 구조가 아니다.
 
 ### 4.5 2단계 레코드 검증과 식재면적 안전장치
 
-#### 표 3. 직경범위 검증과 식재면적 안전장치의 시험 사례 및 결과
+#### 표 4. 직경범위 검증과 식재면적 안전장치의 시험 사례 및 결과
 
 | 검사 | 시험 사례 | 기준 | 결과 |
 |---|---|---|---|
@@ -236,15 +289,40 @@ Manager는 4개 컬렉션의 레코드를 관리한다. Figure 2의 화면은 �
 
 적합범위를 벗어난 값은 거부하고 경계값은 허용했으며, 입력 검증을 우회한 레코드는 계산 단계에서 제외했다. 면적 안전장치는 요구 면적이 대상지 면적을 **초과할 때만** 계산을 중단했다.
 
+#### 표 5. 프로파일 1–3의 입력과 산출값 (표 3의 공통 면적 인벤토리; CF 0.50)
+
+| 프로파일 | ID | 레코드 | D(0) (cm) | n | B(0) (kg) | C(0) (kg C) | D(30) (cm) | C(30) (kg C) | 범위를 처음 벗어나는 연차 |
+|:---:|:---:|---|---:|---:|---:|---:|---:|---:|:---:|
+| 1 | T01 | *Pinus densiflora* | 5.0 | 30 | 4.637 | 69.56 | 15.1 | 1,195.79 | 30 |
+|  | T04 | *Quercus serrata* | 4.0 | 20 | 5.400 | 54.00 | 11.3 | 637.26 | – |
+|  | T07 | *Quercus mongolica* | 8.0 | 15 | 9.412 | 70.59 | 20.0 | 1,217.11 | – |
+|  | S02 | *Rhododendron yedoense* f. *poukhanense* | 1.2 | 40 | 0.1167 | 2.33 | 7.7 | 202.18 | 4 |
+|  | S10 | *Weigela subsessilis* | 1.5 | 25 | 0.1928 | 2.41 | 9.3 | 192.16 | 9 |
+| | | **대상지 합계** | | | | **198.89** | | **3,444.50** | |
+| 2 | T01 | *Pinus densiflora* | 7.0 | 60 | 11.024 | 330.71 | 17.1 | 3,293.85 | 28 |
+|  | T04 | *Quercus serrata* | 8.0 | 25 | 28.044 | 350.55 | 15.3 | 1,636.93 | – |
+|  | T07 | *Quercus mongolica* | 10.0 | 15 | 18.829 | 141.21 | 22.0 | 1,636.65 | – |
+|  | S10 | *Weigela subsessilis* | 1.5 | 25 | 0.1928 | 2.41 | 9.3 | 192.16 | 9 |
+| | | **대상지 합계** | | | | **824.88** | | **6,759.60** | |
+| 3 | T04 | *Quercus serrata* | 4.0 | 20 | 5.400 | 54.00 | 11.3 | 637.26 | – |
+|  | T07 | *Quercus mongolica* | 6.0 | 10 | 3.850 | 19.25 | 18.0 | 584.85 | – |
+|  | S02 | *Rhododendron yedoense* f. *poukhanense* | 1.8 | 120 | 0.3089 | 18.53 | 8.3 | 726.21 | 2 |
+|  | S10 | *Weigela subsessilis* | 2.0 | 90 | 0.3845 | 17.30 | 9.8 | 784.43 | 7 |
+| | | **대상지 합계** | | | | **109.08** | | **2,732.75** | |
+
+<sub>`D`: DBH/RCD; `n`: 개체 수; `B`: 개체 바이오매스; `C`: 레코드 탄소저장량. 마지막 열은 적합범위를 처음 벗어나는 연차(–: 30년차까지 범위 안).</sub>
+
 ### 4.6 결과 보고
 
 <p align="center">
-  <img src="figures/paper/fig6_xlsx_export.png" alt="ForeCarb의 XLSX 출력 예시" width="100%">
+  <img src="figures/paper/fig7_xlsx_export.png" alt="ForeCarb의 XLSX 출력 예시" width="100%">
 </p>
 
-> **Figure 6.** 대상지 단위 탄소저장량 추정과 수종별 탄소 기여도를 보여주는 ForeCarb의 XLSX 출력 예시.
+> **Figure 7.** 프로파일 1–3의 XLSX 보고서에서 고른 항목: (a) 선택한 연차의 저장량과 외삽 비율; (b) 0년차 기여도, 식 ID, 파라미터 변경, 범위를 처음 벗어나는 연차, 30년차 상태. 수종 비율은 교목·관목 소계 기준이다. 표시 항목은 재배열한 것이며 전체 워크북에는 모든 레코드와 연차가 들어 있다.
 
-**(a)** 시나리오 기간 전체에 걸친 프로파일별 연차 교목·관목·총 저장량 · **(b)** 수종별 저장량과 상대 기여도. 추가 워크시트에 대상지 비교 결과와 해당 그림이 저장된다.
+**(a)** 선택한 연차의 프로파일별 총 저장량과 외삽 비율 · **(b)** 수종별 저장량과 비율, 식 ID, 파라미터 변경, 범위를 처음 벗어나는 연차, 30년차 상태. 추가 워크시트에 대상지 비교 결과와 해당 그림이 저장된다.
+
+값이 어떻게 계산되었는지는 두 워크시트에 기록된다. **`계산근거`** 는 계산에 적용된 입력 행마다 식 ID, 컬렉션, 라이브러리 키, 적용 식, 설명변수와 입력값, 식 입력 배율 `q`, 두 번째 변수, 개체 바이오매스, `CF`, 수량, 탄소저장량, 사용자가 바꾼 `a`·`b`·`CF`(라이브러리 값 → 적용 값), 적합범위, 생장 설정, 범위를 처음 벗어나는 연차, 30년 추정 상태를 적고, 계산에서 제외된 행을 사유와 함께 나열한다. 머리말에는 소프트웨어 버전, 식 라이브러리의 내용 지문(SHA-256), 지역, 식재 면적 점검에 쓴 값이 들어간다. **`적합범위_점검`** 은 연도별 합계, 외삽으로 얻은 탄소량과 비율, 레코드별 표시 `v_i(t)` 를 기록한다.
 
 ---
 
@@ -255,7 +333,7 @@ Manager는 4개 컬렉션의 레코드를 관리한다. Figure 2의 화면은 �
 | `ForeCarb.exe` | **Assessment Application** — 대상지 평가·비교·시나리오 |
 | `ForeCarb-Equation-Library-Manager.exe` | **Equation Library Manager** — 상대생장식 편집·검증·배포 |
 
-`ForeCarb_Setup_1.0.exe` 로 두 프로그램이 함께 설치된다(Python 불필요). 소스 실행:
+설치 프로그램은 두 프로그램과 Python을 함께 포함한다. v1.1 바이너리는 아직 재빌드하지 않았으며 예상 출력명은 `FORECAST-SW_Setup_1.1.exe`이다. 소스 실행:
 
 ```powershell
 pip install -r requirements.txt
@@ -279,7 +357,23 @@ python main.py --lang en    # 영어
 | `지역` | 지역명 · 가로(m) · 세로(m) · 대상지 유형 · 위도 · 경도(선택, 십진수 도) |
 | `수종` | 지역명 · 구분(교목/관목) · 수종 · 직경(cm) · 개체수 · 현재 생존율(%) · 연간 생존율(%) · 두 번째 변수 |
 
-머리글은 국문·영문, 수종명은 국명·학명 모두 인식하며 생존율을 비워 두면 100 %다. 없는 수종이나 잘못된 값이 있는 행은 건너뛰고 불러온 뒤 목록으로 알려 준다. [`presets/ForeCarb_데이터_예시.xlsx`](presets/ForeCarb_데이터_예시.xlsx) 는 표 2의 Profile 1–3 과 생존율 예시를 담고 있다. 화면에서 직접 바꾼 계수(`a, b, CF`)는 양식에 저장되지 않는다.
+머리글은 국문·영문, 수종명은 국명·학명 모두 인식하며 생존율을 비워 두면 100 %다. 없는 수종이나 잘못된 값이 있는 행은 건너뛰고 불러온 뒤 목록으로 알려 준다. [`presets/ForeCarb_데이터_예시.xlsx`](presets/ForeCarb_데이터_예시.xlsx) 는 표 3의 Profile 1–3 과 생존율 예시를 담고 있다. 화면에서 직접 바꾼 계수(`a, b, CF`)는 양식에 저장되지 않는다.
+
+### 논문 예시 재현
+
+```powershell
+python reproduce_examples.py                 # Profile 1–3 실행 후 기대값과 대조
+python reproduce_examples.py --out reports   # 지역별 XLSX 보고서도 저장
+python reproduce_examples.py --workbook my_sites.xlsx --no-check
+```
+
+스크립트는 예시 양식 [`presets/ForeCarb_데이터_예시.xlsx`](presets/ForeCarb_데이터_예시.xlsx) 를 불러와 GUI 를 열지 않고 프로그램의 계산 경로 그대로(3D 렌더러만 대체) 각 지역을 계산하고, 0·15·30년 저장량과 적합범위 점검 결과를 출력한 뒤 [`presets/expected_profiles.json`](presets/expected_profiles.json) 과 대조한다. 모두 일치하면 종료 코드 0 을 돌려준다. ForeCarb 가 Profile 1 에 대해 저장하는 보고서는 [`presets/example_report_Profile_1.xlsx`](presets/example_report_Profile_1.xlsx) 로 제공한다. Profile 1 (20 m × 20 m, 대상지 유형 *산불피해지 자연복원*) 의 기대값:
+
+| 연차 | 교목 (kg C) | 관목 (kg C) | 합계 (kg C) | 외삽 (kg C) | 비율 |
+|:---:|---:|---:|---:|---:|---:|
+| 0 | 194.15 | 4.74 | **198.89** | 0.00 | 0.0 % |
+| 15 | 763.85 | 136.35 | **900.20** | 136.35 | 15.1 % |
+| 30 | 3,050.16 | 394.34 | **3,444.50** | 1,590.13 | 46.2 % |
 
 ---
 
@@ -316,7 +410,7 @@ python build_updater.py              # Equation Library Manager (또는 build_li
 
 `pyinstaller` 를 따로 설치할 필요는 없다 — 스크립트가 전용 venv(`~\.carboncalc_build_venv`)를 자동 생성하며 최초 1회만 몇 분 걸린다. `species_data.json` 은 자동 동봉된다.
 
-**설치 마법사(선택):** `build_exe.py --onedir` → `build_updater.py` → [Inno Setup 6](https://jrsoftware.org/isdl.php) 으로 `installer.iss` 컴파일 → `installer_output\ForeCarb_Setup_1.0.exe`.
+**설치 마법사(선택):** `build_exe.py --onedir` → `build_updater.py` → [Inno Setup 6](https://jrsoftware.org/isdl.php) 으로 `installer.iss` 컴파일 → `installer_output\FORECAST-SW_Setup_1.1.exe`.
 
 ---
 
@@ -326,7 +420,7 @@ python build_updater.py              # Equation Library Manager (또는 build_li
 python -m unittest discover -s tests -v
 ```
 
-회귀검사 22건이 표 2–3와 Figure 4–5의 값을 그대로 재현한다 — 라이브러리 레코드 수, 면적 정규화 밀도(`0.4972 / 0.3978 / 0.3315`), 개체수 비례성, 직경 경계값, 시나리오 반복성 및 0년 일치, 관목 mm↔cm 등가성, 호환 수식 55개 전체 실행, 위험 문법 차단. `tests/test_survival_preset.py` 는 생존률 반영 투영(Eq. 6), 데이터 엑셀 저장·불러오기 왕복, XLSX 의 생존률 시트를 검사한다. 동일 검사가 Windows · Python 3.10/3.11 CI에서 실행된다. 빌드 환경과 체크섬: [BUILD_VERIFICATION.md](BUILD_VERIFICATION.md).
+회귀검사 22건이 표 3–4와 Figure 4–6의 값을 그대로 재현한다 — 라이브러리 레코드 수, 면적 정규화 밀도(`0.4972 / 0.3978 / 0.3315`), 개체수 비례성, 직경 경계값, 시나리오 반복성 및 0년 일치, 관목 mm↔cm 등가성, 호환 수식 55개 전체 실행, 위험 문법 차단. `tests/test_survival_preset.py` 는 생존률 반영 투영(Eq. 6), 데이터 엑셀 저장·불러오기 왕복, XLSX 의 생존률 시트를 검사한다. 동일 검사가 Windows · Python 3.10/3.11 CI에서 실행된다. `tests/test_fitted_range_audit.py` 는 적합범위 점검(Eq. 5), Profile 1 의 외삽 비율과 범위 이탈 첫 연차, 식 ID, `계산근거`·`적합범위_점검` 워크시트, 식재 면적 설정, 예시 양식의 재현을 검사한다. 빌드 환경과 체크섬: [BUILD_VERIFICATION.md](BUILD_VERIFICATION.md).
 
 ---
 
@@ -334,14 +428,16 @@ python -m unittest discover -s tests -v
 
 ```
 ├── main.py                        ← 실행 진입점
-├── species_data.json              ← 상대생장식 라이브러리 (77개 레코드) — 표 1
+├── reproduce_examples.py          ← 논문 예시 재현 (GUI 없이 실행)
+├── species_data.json              ← 상대생장식 라이브러리 (77개 레코드) — 표 1–2
 ├── translations_ko_en.json        ← UI 한글→영문 번역표 (JSON 재정의, 재빌드 불필요)
 ├── build_exe.py / build_updater.py / build_library_manager.bat
 ├── updater_app.py                 ← Equation Library Manager — Figure 2, 1–3단계
 ├── installer.iss                  ← Inno Setup 설치 마법사 스크립트
 ├── carbon_calculator/
 │   ├── calculations.py                탄소저장량 계산 엔진 — Eq. (1), (3), 6단계
-│   ├── input_limits.py                식재면적 안전장치 — Eq. (2), 5단계
+│   ├── input_limits.py                식재면적 안전장치 — Eq. (2), 5단계 (사용자 설정)
+│   ├── extrapolation.py               적합범위 점검 — Eq. (5), 외삽 비율
 │   ├── survival.py                    생존률 반영 개체수·탄소량 — Eq. (6)
 │   ├── preset_io.py                   데이터 엑셀 불러오기·저장 (지역·수종 시트)
 │   ├── equation_eval.py               수식 평가 (AST 허용목록)
@@ -349,16 +445,17 @@ python -m unittest discover -s tests -v
 │   ├── species_library.py             77개 레코드 통합 계층 (생장형 분류·그래프 기준)
 │   ├── main_window.py                 대상지 평가 화면 — Figure 3, 4–7단계
 │   ├── combined_window.py             통합 윈도우, 대상지별 탭 — Figure 4
-│   ├── tree_simulation/               3D 성장 시각화 — Figure 5
-│   ├── excel_export.py                XLSX 내보내기 — Figure 6, 8단계
+│   ├── tree_simulation/               3D 성장 시각화 — Figure 6
+│   ├── excel_export.py                XLSX 내보내기 — Figure 7, 8단계
 │   ├── main_window2.py                국내·국외 화면 (v1.0 미노출)
 │   ├── plotting.py / widgets.py / i18n.py / translations.py
 │   └── theme.py / font_config.py / ui_scale.py / qt_locale.py
-├── presets/                       ← 예시 입력 데이터 엑셀
+├── presets/                       ← 예시 입력 데이터 엑셀과 기대값
 ├── docs/                          ← 사용자 매뉴얼 (PDF)
-├── tests/test_core.py             ← 회귀검사 22건 — 표 2–3
+├── tests/test_core.py             ← 회귀검사 22건 — 표 3–4
 ├── tests/test_survival_preset.py  ← 생존률·데이터 엑셀 검사
-└── figures/paper/                 ← 첨부 논문 원고의 Figure 1–6
+├── tests/test_fitted_range_audit.py ← 적합범위 점검·계산근거·설정·재현 검사
+└── figures/paper/                 ← 첨부 논문 원고의 Figure 1–7
 ```
 
 **문제 해결** — PyQt5 없음: `pip install -r requirements.txt` · PyInstaller 빌드 오류: `--rebuild-venv` · exe 실행 직후 종료: `--debug` 로 재빌드 후 콘솔 확인 · 한글 깨짐: "맑은 고딕" 설치 확인 · 글자 크기: `carbon_calculator\font_config.py` 의 `FONT_SIZE_DELTA` 조정.
@@ -374,13 +471,13 @@ python -m unittest discover -s tests -v
 
 ### 상대생장식 출처
 
-참고문헌 번호는 논문의 표 1 및 참고문헌 목록과 동일하다. 기관명과 제목은 논문의 영문 서지정보를 따른다.
+참고문헌 번호는 논문의 참고문헌 목록을 따르고, 출처 번호는 표 2의 번호다. 기관명과 제목은 논문의 영문 서지정보를 따른다.
 
-- <a id="ref-23"></a>**[23]** National Institute of Forest Science (2024). *Development of allometric equations for young trees.* Contract research report.
-- <a id="ref-24"></a>**[24]** National Institute of Forest Science (2023). *Biomass measurement and development of allometric equations for oaks in forest restoration sites.* Research report.
-- <a id="ref-25"></a>**[25]** Korea Forest Research Institute (2014). *Carbon emission factors and biomass allometric equations for major tree species in Korea.* Research report.
-- <a id="ref-26"></a>**[26]** Korea Arboreta and Gardens Institute (2022). *Establishing a foundation for enhancing urban biodiversity.* Research report.
-- <a id="ref-27"></a>**[27]** Korea Arboreta and Gardens Institute (2023). *Research on enhancing biodiversity in urban forests.* Research report.
+- <a id="ref-28"></a>**[28]** (출처 번호 2) National Institute of Forest Science (2024). *Development of allometric equations for young trees.* Contract research report.
+- <a id="ref-29"></a>**[29]** (출처 번호 4) National Institute of Forest Science (2023). *Biomass measurement and development of allometric equations for oaks in forest restoration sites.* Research report.
+- <a id="ref-30"></a>**[30]** (출처 번호 7) Korea Forest Research Institute (2014). *Carbon emission factors and biomass allometric equations for major tree species in Korea.* Research report.
+- <a id="ref-31"></a>**[31]** (출처 번호 6) Korea Arboreta and Gardens Institute (2022). *Establishing a foundation for enhancing urban biodiversity.* Research report.
+- <a id="ref-32"></a>**[32]** (출처 번호 5) Korea Arboreta and Gardens Institute (2023). *Research on enhancing biodiversity in urban forests.* Research report.
 
 **문의**: [kc.jeong-isw@cbnu.ac.kr](mailto:kc.jeong-isw@cbnu.ac.kr) · [gc.jo-isw@cbnu.ac.kr](mailto:gc.jo-isw@cbnu.ac.kr)
 
@@ -398,3 +495,33 @@ python -m unittest discover -s tests -v
 ---
 
 <sub>본 연구는 농림축산식품부 IPET(RS-2024-00398561), 과학기술정보통신부 IITP(IITP-2026-RS-2020-II201462), 교육부 NRF(RS-2025-25430681), 국립산림과학원 NIFoS(FE0100-2022-01-2026)의 지원으로 수행되었다.</sub>
+
+## 핵심 식의 출처와 비교 시 유의점
+
+[핵심 수식별 출처 확인표](docs/core_equation_provenance.tsv)는 T01의 대상지별 세 식을 포함한 24개 식을 구분한다.
+2025년 과제 보고서는 핵심 식 22개의 종속변수를 개체 전체의 건중량(전체 바이오매스)으로 정의하며,
+지상부와 지하부로 나눈 식을 따로 제시하지 않는다. 원자료는 국내에서 전체 식물을 직접 채취해
+잎·소지, 가지, 줄기, 뿌리를 측정한 것이다: 세종 실험 양묘장의 관목(2022–2025); 세종, 정읍, 고창, 영동,
+옥천, 당진, 예산, 여주, 사천, 완도 양묘장의 어린나무와 관목; 산불피해지·채석장 복원지의 국립산림과학원 자료.
+입력창은 최초 목록 또는 검색 결과의 첫 항목을 표시한다. 이는 과학적 적합도에 따른 추천이 아니며,
+사용자가 적합한 식 ID를 선택해야 한다. a/b/CF 직접 수정은 교목·관목 핵심 식에서만 가능하다.
+v1.1 설치 파일은 아직 재빌드하지 않았으며, 소스에서 실행한다.
+
+### 식재 면적 민감도와 대상지 간 비교
+
+`python reproduce_safeguard_sensitivity.py --out sensitivity.csv`는 논문 3.5절의 민감도 예시
+8개 조건을 실제 입력 검증·계산·출력 데이터 생성 경로에서 재현한다.
+Profile 1(교목 65개체, 관목 65개체)에서 관목 면적을 0.10/0.25/0.50/1.00 m²로
+바꾸면 필요 면적은 71.50/81.25/97.50/130.00 m²이다. 400 m²에서는 모두 통과하고,
+100 m²에서는 마지막 조건이 거부된다. 통과한 동일 재고의 현재 탄소량은 모두
+198.89 kg C이다. 스크립트는 세션 설정을 복원하고 사용자 설정을 저장하지 않는다.
+[결과 CSV](docs/safeguard_sensitivity.csv).
+
+기본값은 교목 1.00 m², 관목 0.25 m²(1 m, 0.5 m 격자)이다. 연구팀의 어린나무·관목 표본에서
+측정한 수관폭에 근거한 값이며, 교목 값은 FAO의 밀식 간격과도 일치한다. 이 값은 입력 개체 수만
+제한하고 바이오매스·탄소 계산에는 들어가지 않는다.
+
+대상지 간 비교에는 같은 바이오매스 부위와 같은 면적 정의를 쓰고, 중복 합산을 피하도록 소계를
+나누어 보고한다. 핵심 식 22개는 전체(개체 전체) 바이오매스를 추정하며, 국내·국외 컬렉션의 레코드는
+각 레코드에 부위가 적혀 있다. ForeCarb는 부위 호환성을 자동으로 검사하지 않는다. 현재 예시는
+계산 재현성 시연이다.

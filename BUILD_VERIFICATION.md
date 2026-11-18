@@ -1,12 +1,18 @@
-# FORECAST-SW v1.0 build verification
+# FORECAST-SW v1.1 build verification
 
-Build and artifact verification: 2026-09-07 (Asia/Seoul)
-Test suite re-verified: 2026-09-18 (Asia/Seoul), Python 3.13.5
+Build and artifact verification: 2026-09-07 (Asia/Seoul), v1.0 build
+Test suite re-verified: 2026-11-17 (Asia/Seoul), Python 3.12.14, v1.1 source
 
-The executable and installer checks below describe the earlier build; they
-have not been repeated for the shared-year UI changes.
+The executable and installer checks below describe the v1.0 build; they have
+not been repeated for v1.1. Rebuild the executables and the installer from the
+exact source commit cited in the revised manuscript and replace the checksums below before distributing binaries.
 
-## Environment
+The v1.1 source suite also checks category and whole-site extrapolation annotations.
+Figures 3 and 5 were rendered from the Qt/Matplotlib application; the 3D panels
+were rendered with PyVista off screen. Figure 6 contains values read from the
+regenerated Profile 1 workbook. No v1.1 binaries or public tag were created.
+
+## Environment (historical v1.0 build)
 
 - Windows NT 10.0.26100, 64 bit
 - Python 3.11.16
@@ -16,7 +22,7 @@ have not been repeated for the shared-year UI changes.
 
 ## Checks performed
 
-1. `python -m unittest discover -s tests -v`: 60 tests passed, including the
+1. `python -m unittest discover -s tests -v`: 80 tests passed, including the
    English coverage of both UIs (the assessment app and the Equation Library
    Manager, which carries its own translation table), the
    shared-centimeter DBH/RCD contract, legacy shrub-equation equivalence,

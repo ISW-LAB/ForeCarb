@@ -1,0 +1,290 @@
+{
+  "Profile 1": {
+    "site_area_m2": 400.0,
+    "site_category": "Post-fire site, natural restoration",
+    "stocks_kg_c": {
+      "0": {
+        "tree": 194.15,
+        "shrub": 4.74,
+        "total": 198.89,
+        "extrapolated": 0.0,
+        "extrapolated_share_pct": 0.0
+      },
+      "15": {
+        "tree": 763.85,
+        "shrub": 136.35,
+        "total": 900.2,
+        "extrapolated": 136.35,
+        "extrapolated_share_pct": 15.1
+      },
+      "30": {
+        "tree": 3050.16,
+        "shrub": 394.34,
+        "total": 3444.5,
+        "extrapolated": 1590.13,
+        "extrapolated_share_pct": 46.2
+      }
+    },
+    "density_year0_kg_c_m2": 0.4972,
+    "with_survival_kg_c": {
+      "0": 198.89,
+      "15": 900.2,
+      "30": 3444.5
+    },
+    "records": [
+      {
+        "equation_id": "T01",
+        "diameter_cm": 5.0,
+        "count": 30,
+        "carbon_kg": 69.56,
+        "first_year_outside_range": 30,
+        "carbon_year30_kg": 1195.79
+      },
+      {
+        "equation_id": "T04",
+        "diameter_cm": 4.0,
+        "count": 20,
+        "carbon_kg": 54.0,
+        "first_year_outside_range": null,
+        "carbon_year30_kg": 637.26
+      },
+      {
+        "equation_id": "T07",
+        "diameter_cm": 8.0,
+        "count": 15,
+        "carbon_kg": 70.59,
+        "first_year_outside_range": null,
+        "carbon_year30_kg": 1217.11
+      },
+      {
+        "equation_id": "S02",
+        "diameter_cm": 1.2,
+        "count": 40,
+        "carbon_kg": 2.33,
+        "first_year_outside_range": 4,
+        "carbon_year30_kg": 202.18
+      },
+      {
+        "equation_id": "S10",
+        "diameter_cm": 1.5,
+        "count": 25,
+        "carbon_kg": 2.41,
+        "first_year_outside_range": 9,
+        "carbon_year30_kg": 192.16
+      }
+    ],
+    "excluded_rows": 0
+  },
+  "Profile 2": {
+    "site_area_m2": 400.0,
+    "site_category": "Post-fire site, natural restoration",
+    "stocks_kg_c": {
+      "0": {
+        "tree": 822.47,
+        "shrub": 2.41,
+        "total": 824.88,
+        "extrapolated": 0.0,
+        "extrapolated_share_pct": 0.0
+      },
+      "15": {
+        "tree": 1973.38,
+        "shrub": 59.35,
+        "total": 2032.73,
+        "extrapolated": 59.35,
+        "extrapolated_share_pct": 2.9
+      },
+      "30": {
+        "tree": 6567.44,
+        "shrub": 192.16,
+        "total": 6759.6,
+        "extrapolated": 3486.01,
+        "extrapolated_share_pct": 51.6
+      }
+    },
+    "density_year0_kg_c_m2": 2.0622,
+    "with_survival_kg_c": {
+      "0": 824.88,
+      "15": 2032.73,
+      "30": 6759.6
+    },
+    "records": [
+      {
+        "equation_id": "T01",
+        "diameter_cm": 7.0,
+        "count": 60,
+        "carbon_kg": 330.71,
+        "first_year_outside_range": 28,
+        "carbon_year30_kg": 3293.85
+      },
+      {
+        "equation_id": "T04",
+        "diameter_cm": 8.0,
+        "count": 25,
+        "carbon_kg": 350.55,
+        "first_year_outside_range": null,
+        "carbon_year30_kg": 1636.93
+      },
+      {
+        "equation_id": "T07",
+        "diameter_cm": 10.0,
+        "count": 15,
+        "carbon_kg": 141.21,
+        "first_year_outside_range": null,
+        "carbon_year30_kg": 1636.65
+      },
+      {
+        "equation_id": "S10",
+        "diameter_cm": 1.5,
+        "count": 25,
+        "carbon_kg": 2.41,
+        "first_year_outside_range": 9,
+        "carbon_year30_kg": 192.16
+      }
+    ],
+    "excluded_rows": 0
+  },
+  "Profile 3": {
+    "site_area_m2": 400.0,
+    "site_category": "Post-fire site, natural restoration",
+    "stocks_kg_c": {
+      "0": {
+        "tree": 73.25,
+        "shrub": 35.83,
+        "total": 109.08,
+        "extrapolated": 0.0,
+        "extrapolated_share_pct": 0.0
+      },
+      "15": {
+        "tree": 356.48,
+        "shrub": 562.36,
+        "total": 918.85,
+        "extrapolated": 562.36,
+        "extrapolated_share_pct": 61.2
+      },
+      "30": {
+        "tree": 1222.11,
+        "shrub": 1510.63,
+        "total": 2732.75,
+        "extrapolated": 1510.63,
+        "extrapolated_share_pct": 55.3
+      }
+    },
+    "density_year0_kg_c_m2": 0.2727,
+    "with_survival_kg_c": {
+      "0": 109.08,
+      "15": 918.85,
+      "30": 2732.75
+    },
+    "records": [
+      {
+        "equation_id": "T04",
+        "diameter_cm": 4.0,
+        "count": 20,
+        "carbon_kg": 54.0,
+        "first_year_outside_range": null,
+        "carbon_year30_kg": 637.26
+      },
+      {
+        "equation_id": "T07",
+        "diameter_cm": 6.0,
+        "count": 10,
+        "carbon_kg": 19.25,
+        "first_year_outside_range": null,
+        "carbon_year30_kg": 584.85
+      },
+      {
+        "equation_id": "S02",
+        "diameter_cm": 1.8,
+        "count": 120,
+        "carbon_kg": 18.53,
+        "first_year_outside_range": 2,
+        "carbon_year30_kg": 726.21
+      },
+      {
+        "equation_id": "S10",
+        "diameter_cm": 2.0,
+        "count": 90,
+        "carbon_kg": 17.3,
+        "first_year_outside_range": 7,
+        "carbon_year30_kg": 784.43
+      }
+    ],
+    "excluded_rows": 0
+  },
+  "Profile 1 (생존율 적용)": {
+    "site_area_m2": 400.0,
+    "site_category": "Post-fire site, natural restoration",
+    "stocks_kg_c": {
+      "0": {
+        "tree": 194.15,
+        "shrub": 4.74,
+        "total": 198.89,
+        "extrapolated": 0.0,
+        "extrapolated_share_pct": 0.0
+      },
+      "15": {
+        "tree": 763.85,
+        "shrub": 136.35,
+        "total": 900.2,
+        "extrapolated": 136.35,
+        "extrapolated_share_pct": 15.1
+      },
+      "30": {
+        "tree": 3050.16,
+        "shrub": 394.34,
+        "total": 3444.5,
+        "extrapolated": 1590.13,
+        "extrapolated_share_pct": 46.2
+      }
+    },
+    "density_year0_kg_c_m2": 0.4972,
+    "with_survival_kg_c": {
+      "0": 175.95,
+      "15": 504.53,
+      "30": 1258.04
+    },
+    "records": [
+      {
+        "equation_id": "T01",
+        "diameter_cm": 5.0,
+        "count": 30,
+        "carbon_kg": 69.56,
+        "first_year_outside_range": 30,
+        "carbon_year30_kg": 1195.79
+      },
+      {
+        "equation_id": "T04",
+        "diameter_cm": 4.0,
+        "count": 20,
+        "carbon_kg": 54.0,
+        "first_year_outside_range": null,
+        "carbon_year30_kg": 637.26
+      },
+      {
+        "equation_id": "T07",
+        "diameter_cm": 8.0,
+        "count": 15,
+        "carbon_kg": 70.59,
+        "first_year_outside_range": null,
+        "carbon_year30_kg": 1217.11
+      },
+      {
+        "equation_id": "S02",
+        "diameter_cm": 1.2,
+        "count": 40,
+        "carbon_kg": 2.33,
+        "first_year_outside_range": 4,
+        "carbon_year30_kg": 202.18
+      },
+      {
+        "equation_id": "S10",
+        "diameter_cm": 1.5,
+        "count": 25,
+        "carbon_kg": 2.41,
+        "first_year_outside_range": 9,
+        "carbon_year30_kg": 192.16
+      }
+    ],
+    "excluded_rows": 0
+  }
+}

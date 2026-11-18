@@ -6,11 +6,17 @@ Carbon1 (자생복원종 교목/관목) 결과의 Excel(.xlsx) 내보내기.
 openpyxl 에만 의존하며 PyQt/matplotlib 에 의존하지 않는다(테스트 용이).
 호출측(main_window / combined_window)이 순수 파이썬 dict(`payload`)를 만들어 넘긴다.
 
-단일 지역 export (`export_carbon1_to_excel`) — 4 sheets:
-  추정_교목 · 추정_관목 · 기여도 · 그래프
+단일 지역 export (`export_carbon1_to_excel`) — 7 sheets:
+  추정_교목 · 추정_관목 · 기여도 · 생존률_반영 · 계산근거 · 적합범위_점검 · 그래프
 
-전체 지역 통합 export (`export_all_regions_to_excel`) — 4 sheets:
-  지역별_추정치 · 탄소_기여도 · 지역_비교분석 · 그래프
+전체 지역 통합 export (`export_all_regions_to_excel`) — 7 sheets:
+  지역별_추정치 · 탄소_기여도 · 생존률_반영 · 지역_비교분석 · 계산근거 · 적합범위_점검 · 그래프
+
+계산근거 시트는 행마다 적용한 식(식 ID·식·계수), 사용자가 바꾼 계수, 제외된 입력 행,
+적합범위를 처음 벗어나는 연차를 기록한다. 적합범위_점검 시트는 연도별로 합계 가운데
+적합범위 밖(외삽) 추정이 차지하는 탄소량과 비율을 기록한다. 두 시트가 쓰는 payload
+항목(`software`, `library`, `planting_area`, `audit`, 행의 `equation_id` 등)은 모두
+선택 항목이라 없으면 빈칸으로 남는다.
 
 payload 구조 (단일 지역)::
 
@@ -194,6 +200,378 @@ def _sheet_graphs(wb: Workbook, payload: dict) -> None:
         row += span
 
 
+# ─────────────────────────── 계산근거 시트 ───────────────────────────
+
+def _text(cell, value, align=LEFT) -> None:
+    cell.value = value
+    cell.alignment = align
+    cell.border = BORDER
+
+
+def _parameter_change_text(row: dict) -> str:
+    """사용자가 바꾼 (a, b, CF) 를 '라이브러리 값 → 적용 값' 으로 적는다."""
+    if not row.get("overridden"):
+        return tr("없음")
+    parts = []
+    for name, lib_key, used_key in (("a", "library_a", "a"), ("b", "library_b", "b"),
+                                    ("CF", "library_cf", "cf")):
+        before, after = row.get(lib_key), row.get(used_key)
+        if before is None or after is None or abs(float(before) - float(after)) <= 1e-12:
+            continue
+        parts.append(f"{name}: {float(before):g} → {float(after):g}")
+    return "; ".join(parts) if parts else tr("없음")
+
+
+def _range_text(row: dict) -> str:
+    dmin, dmax = row.get("dmin"), row.get("dmax")
+    if dmin is None or dmax is None:
+        return tr("미제공")
+    return f"{float(dmin):g} ~ {float(dmax):g}"
+
+
+def _growth_text(row: dict) -> str:
+    growth = row.get("growth")
+    if growth:
+        return " / ".join(f"{float(g):.2f}" for g in growth)
+    # 생장량이 없는 레코드: "수종: X(t)=X(0) × 1.02^t (assumed)" 에서 식 부분만 적는다.
+    note = row.get("growth_assumption") or ""
+    return note.split(": ", 1)[-1] if note else tr("연 2% 가정")
+
+
+def _rounded(value, digits: int):
+    return None if value is None else round(float(value), digits)
+
+
+def _first_outside_text(row: dict) -> str:
+    if row.get("dmin") is None or row.get("dmax") is None:
+        return tr("점검 불가 (범위 미제공)")
+    first = row.get("first_outside")
+    return tr("없음 (30년까지 범위 안)") if first is None else str(int(first))
+
+
+def _final_status_text(row: dict) -> str:
+    inside = row.get("inside")
+    if inside is None:
+        return tr("점검 불가 (범위 미제공)")
+    return tr("범위 안") if inside[-1] else tr("외삽 (범위 밖)")
+
+
+def _collection_text(code) -> str:
+    return {"T": tr("교목"), "S": tr("관목"), "D": tr("국내"), "I": tr("국외")}.get(code, code or "")
+
+
+def _detail_headers() -> list:
+    return [
+        tr("구분"), tr("식 ID"), tr("컬렉션"), tr("수종"), tr("라이브러리 키"), tr("적용 식"),
+        tr("설명변수"), tr("입력값"), tr("식 입력 배율 q"), tr("두 번째 변수"),
+        tr("개체 바이오매스(kg)"), "CF", tr("수량"), tr("탄소저장량(kgC)"), tr("계수 변경"),
+        tr("적합범위"), tr("연간 직경 생장량(cm/yr, 1~10/11~20/21~30년)"), tr("범위 이탈 첫 연차"),
+        tr("30년 설명변수 값"), tr("30년 탄소저장량(kgC)"), tr("30년 추정 상태"),
+    ]
+
+
+_DETAIL_WIDTHS = [8, 8, 11, 30, 22, 44, 12, 9, 10, 16, 14, 7, 8, 14, 26, 12, 24, 16, 12, 16, 20]
+
+
+def _detail_values(kind_kr: str, row: dict) -> list:
+    quantity = row.get("quantity") or 0
+    cf = row.get("cf")
+    carbon = row.get("carbon")
+    biomass = None
+    if carbon is not None and cf and quantity:
+        biomass = float(carbon) / (float(cf) * float(quantity))
+    var2 = row.get("var2")
+    var2_text = "-" if var2 is None else f"{row.get('var2_label') or ''} = {float(var2):g}".strip()
+    return [
+        kind_kr, row.get("equation_id") or "", _collection_text(row.get("collection")),
+        species_name(row.get("species", "")), row.get("species", ""),
+        " ".join((row.get("formula") or "").split()),
+        row.get("predictor") or "", row.get("diameter"), row.get("unit_scale"), var2_text,
+        _rounded(biomass, 6), cf, quantity, _rounded(carbon, 4), _parameter_change_text(row),
+        _range_text(row), _growth_text(row), _first_outside_text(row),
+        _rounded(row.get("final_predictor"), 6), _rounded(row.get("final_carbon"), 4),
+        _final_status_text(row),
+    ]
+
+
+# 숫자 열(1부터)과 표시 형식 — 나머지 열은 문자열로 쓴다.
+_DETAIL_NUMBER_FORMATS = {8: "0.00", 9: "0", 11: "#,##0.0000", 12: "0.00", 13: "#,##0",
+                          14: "#,##0.00", 19: "0.00", 20: "#,##0.00"}
+
+
+def _write_detail_row(ws, r: int, values: list, offset: int = 0) -> None:
+    for c, value in enumerate(values, 1):
+        cell = ws.cell(r, c + offset)
+        fmt = _DETAIL_NUMBER_FORMATS.get(c)
+        if fmt and isinstance(value, (int, float)):
+            _num(cell, value, fmt)
+        else:
+            _text(cell, "" if value is None else value,
+                  CENTER if c in (1, 2, 3, 16, 18, 21) else LEFT)
+
+
+def _library_line(payload: dict) -> str:
+    library = payload.get("library") or {}
+    if not library.get("file"):
+        return tr("내장 기본 라이브러리")
+    text = library["file"]
+    if library.get("schema_version"):
+        text += tr(" (스키마 {v})").format(v=library["schema_version"])
+    if library.get("sha256"):
+        text += f"  ·  SHA-256 {library['sha256']}"
+    return text
+
+
+def _planting_line(payload: dict) -> str:
+    area = payload.get("planting_area")
+    if not area:
+        return "-"
+    return tr("교목 {tn:,}개체 × {tu:g} m² + 관목 {sn:,}개체 × {su:g} m² = 필요 {req:,.2f} m² "
+              "(대상지 {site:,.2f} m²)").format(
+        tn=area.get("tree_quantity", 0), tu=area.get("tree_unit", 0),
+        sn=area.get("shrub_quantity", 0), su=area.get("shrub_unit", 0),
+        req=area.get("required", 0.0), site=area.get("site", 0.0))
+
+
+def _software_line(payload: dict) -> str:
+    software = payload.get("software") or {}
+    if not software:
+        return "-"
+    return f"{software.get('name', 'ForeCarb')} v{software.get('version', '')}".strip()
+
+
+def _site_line(payload: dict) -> str:
+    region = payload.get("region") or {}
+    if not region:
+        return "-"
+    return tr("{name} · {env} · {w:g} × {h:g} m = {area:,.0f} m²").format(
+        name=region.get("name") or tr("지역"), env=environment_name(region.get("environment") or ""),
+        w=float(region.get("area_w") or 0), h=float(region.get("area_h") or 0),
+        area=float(region.get("area") or 0))
+
+
+def _write_excluded(ws, r: int, payloads: list, with_site: bool) -> int:
+    """제외된 입력 행 표를 r 행부터 쓰고 다음 빈 행 번호를 돌려준다."""
+    ws.cell(r, 1, tr("계산에서 제외된 입력 행")).font = TITLE_FONT
+    r += 1
+    headers = ([tr("지역")] if with_site else []) + [
+        tr("구분"), tr("수종"), tr("입력값"), tr("수량"), tr("제외 사유")]
+    for c, h in enumerate(headers, 1):
+        ws.cell(r, c, h)
+    _style_header_row(ws, r, len(headers))
+    r += 1
+    any_row = False
+    for p in payloads:
+        site = (p.get("region") or {}).get("name") or tr("지역")
+        for kind_kr, key in _categories():
+            for item in (p.get(key) or {}).get("excluded") or []:
+                any_row = True
+                values = ([site] if with_site else []) + [
+                    kind_kr, species_name(item.get("species", "")), item.get("diameter"),
+                    item.get("quantity"), item.get("reason", "")]
+                for c, value in enumerate(values, 1):
+                    _text(ws.cell(r, c), "" if value is None else value)
+                r += 1
+    if not any_row:
+        ws.cell(r, 1, tr("제외된 입력 행이 없습니다."))
+        r += 1
+    return r + 1
+
+
+def _sheet_details(wb: Workbook, payloads: list, with_site: bool = False) -> None:
+    """계산근거: 적용 식·계수·사용자 변경·제외 행·적합범위 이탈 연차.
+
+    단일 지역은 payload 1개, 통합본은 지역 payload 목록을 받는다(지역 열이 추가된다).
+    """
+    ws = wb.create_sheet(tr("계산근거"))
+    ws.cell(1, 1, tr("계산 근거 — 적용 식, 계수 변경, 제외 행, 적합범위 점검")).font = TITLE_FONT
+    first = payloads[0] if payloads else {}
+    info = [
+        (tr("소프트웨어"), _software_line(first)),
+        (tr("식 라이브러리"), _library_line(first)),
+        (tr("생성 시각"), first.get("generated_at") or "-"),
+    ]
+    if not with_site:
+        info.insert(2, (tr("지역"), _site_line(first)))
+        info.insert(3, (tr("식재 면적 점검"), _planting_line(first)))
+    r = 2
+    for label, value in info:
+        ws.cell(r, 1, label).font = BOLD_FONT
+        ws.cell(r, 2, value)
+        r += 1
+    ws.cell(r, 1, tr("식 ID = 컬렉션(T 교목·S 관목·D 국내·I 국외) + 라이브러리 순번. "
+                     "범위 이탈 첫 연차 = 설명변수 추정값이 적합범위를 처음 벗어나는 해(그 뒤 추정은 외삽).")
+            ).font = Font(color="555555")
+    r += 2
+
+    if with_site:
+        ws.cell(r, 1, tr("지역별 식재 면적 점검")).font = TITLE_FONT
+        r += 1
+        for p in payloads:
+            ws.cell(r, 1, _site_line(p))
+            ws.cell(r, 6, _planting_line(p))
+            r += 1
+        r += 1
+
+    ws.cell(r, 1, tr("계산에 적용된 입력 행")).font = TITLE_FONT
+    r += 1
+    offset = 1 if with_site else 0
+    headers = ([tr("지역")] if with_site else []) + _detail_headers()
+    for c, h in enumerate(headers, 1):
+        ws.cell(r, c, h)
+    _style_header_row(ws, r, len(headers))
+    ws.row_dimensions[r].height = 32
+    for c in range(1, len(headers) + 1):
+        ws.cell(r, c).alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    header_row = r
+    r += 1
+    any_row = False
+    for p in payloads:
+        site = (p.get("region") or {}).get("name") or tr("지역")
+        for kind_kr, key in _categories():
+            for row in (p.get(key) or {}).get("rows") or []:
+                any_row = True
+                if with_site:
+                    _text(ws.cell(r, 1), site)
+                _write_detail_row(ws, r, _detail_values(kind_kr, row), offset)
+                r += 1
+    if not any_row:
+        ws.cell(r, 1, tr("계산에 적용된 입력 행이 없습니다."))
+        r += 1
+    r += 1
+    _write_excluded(ws, r, payloads, with_site)
+    _set_widths(ws, ([18] if with_site else []) + _DETAIL_WIDTHS)
+    ws.freeze_panes = ws.cell(header_row + 1, 1)
+
+
+# ─────────────────────────── 적합범위 점검 시트 ───────────────────────────
+
+def _audit_of(cat_payload: dict):
+    audit = (cat_payload or {}).get("audit")
+    if not audit or not audit.get("years"):
+        return None
+    return audit
+
+
+def _sheet_audit_single(wb: Workbook, payload: dict) -> None:
+    """적합범위_점검: 연도별 합계와 그 가운데 적합범위 밖(외삽) 추정의 탄소량·비율."""
+    ws = wb.create_sheet(tr("적합범위_점검"))
+    ws.cell(1, 1, tr("적합범위 점검 — 연도별 외삽 추정의 탄소량과 비율")).font = TITLE_FONT
+    ws.cell(2, 1, tr("v(t) = 1: 그 해의 설명변수 값이 적합범위 안, 0: 범위 밖(외삽). "
+                     "점검은 추정값을 바꾸지 않고 표시만 합니다.")).font = Font(color="555555")
+    tree, shrub = _audit_of(payload.get("tree")), _audit_of(payload.get("shrub"))
+    site = payload.get("audit") if (payload.get("audit") or {}).get("years") else None
+    reference = site or tree or shrub
+    if reference is None:
+        ws.cell(4, 1, tr("추정 데이터가 없습니다."))
+        return
+    years = reference["years"]
+    n = len(years)
+    zero = {"total": [0.0] * n, "extrapolated": [0.0] * n, "unassessed": [0.0] * n,
+            "share": [0.0] * n}
+    tree, shrub = tree or zero, shrub or zero
+    if site is None:
+        total = [tree["total"][i] + shrub["total"][i] for i in range(n)]
+        extr = [tree["extrapolated"][i] + shrub["extrapolated"][i] for i in range(n)]
+        site = {"total": total, "extrapolated": extr,
+                "unassessed": [tree["unassessed"][i] + shrub["unassessed"][i] for i in range(n)],
+                "share": [100.0 * e / t if t > 0 else 0.0 for e, t in zip(extr, total)]}
+
+    # 행별 범위 안/밖 표시 열 (1 = 범위 안, 0 = 범위 밖, 빈칸 = 범위 미제공)
+    flagged = []
+    for kind_kr, key in _categories():
+        proj = (payload.get(key) or {}).get("projection") or {}
+        labels = [s.get("label", "") for s in proj.get("series", [])]
+        for i, row in enumerate((payload.get(key) or {}).get("rows") or []):
+            label = labels[i] if i < len(labels) else species_name(row.get("species", ""))
+            flagged.append((f"v(t): {label}", row.get("inside")))
+
+    headers = [tr("경과연도(년)"),
+               tr("교목 합계(kgC)"), tr("교목 외삽(kgC)"),
+               tr("관목 합계(kgC)"), tr("관목 외삽(kgC)"),
+               tr("대상지 합계(kgC)"), tr("대상지 외삽(kgC)"), tr("외삽 비율(%)"),
+               tr("범위 미제공(kgC)")] + [label for label, _flags in flagged]
+    for c, h in enumerate(headers, 1):
+        ws.cell(4, c, h)
+    _style_header_row(ws, 4, len(headers))
+    ws.row_dimensions[4].height = 46
+    for c in range(1, len(headers) + 1):
+        ws.cell(4, c).alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    for i, yr in enumerate(years):
+        r = i + 5
+        c = ws.cell(r, 1, int(yr)); c.alignment = CENTER; c.border = BORDER
+        values = [tree["total"][i], tree["extrapolated"][i], shrub["total"][i],
+                  shrub["extrapolated"][i], site["total"][i], site["extrapolated"][i]]
+        for j, value in enumerate(values, 2):
+            _num(ws.cell(r, j), round(float(value), 2))
+        _num(ws.cell(r, 8), round(float(site["share"][i]), 2), "0.00")
+        _num(ws.cell(r, 9), round(float(site["unassessed"][i]), 2))
+        for j, (_label, flags) in enumerate(flagged, 10):
+            cell = ws.cell(r, j)
+            cell.border = BORDER
+            cell.alignment = CENTER
+            if flags is not None and i < len(flags):
+                cell.value = 1 if flags[i] else 0
+    _set_widths(ws, [12, 14, 14, 14, 14, 15, 15, 12, 14] + [22] * len(flagged))
+    ws.freeze_panes = ws.cell(5, 2)
+
+
+def _sheet_audit_all(wb: Workbook, payloads: list) -> None:
+    """통합본 적합범위_점검: 지역별 합계 · 외삽 탄소량 · 외삽 비율(연도별)."""
+    ws = wb.create_sheet(tr("적합범위_점검"))
+    ws.cell(1, 1, tr("지역별 적합범위 점검 — 연도별 외삽 추정의 탄소량과 비율")).font = TITLE_FONT
+    ws.cell(2, 1, tr("외삽 = 설명변수 추정값이 적용 식의 적합범위 밖인 해의 추정. "
+                     "행별 표시는 '계산근거' 시트를 보세요.")).font = Font(color="555555")
+    regions, ref_years = [], None
+    for p in payloads:
+        audit = p.get("audit") if (p.get("audit") or {}).get("years") else None
+        if audit is None:
+            tree, shrub = _audit_of(p.get("tree")), _audit_of(p.get("shrub"))
+            base = tree or shrub
+            if base is not None:
+                n = len(base["years"])
+                zero = {"total": [0.0] * n, "extrapolated": [0.0] * n}
+                tree, shrub = tree or zero, shrub or zero
+                total = [tree["total"][i] + shrub["total"][i] for i in range(n)]
+                extr = [tree["extrapolated"][i] + shrub["extrapolated"][i] for i in range(n)]
+                audit = {"years": base["years"], "total": total, "extrapolated": extr,
+                         "share": [100.0 * e / t if t > 0 else 0.0 for e, t in zip(extr, total)]}
+        if audit is not None and ref_years is None:
+            ref_years = audit["years"]
+        regions.append(((p.get("region") or {}).get("name") or tr("지역"), audit))
+    if ref_years is None:
+        ws.cell(4, 1, tr("추정 데이터가 없습니다."))
+        return
+    c = ws.cell(3, 1, tr("경과연도(년)"))
+    c.fill = HEADER_FILL; c.font = HEADER_FONT; c.alignment = CENTER; c.border = BORDER
+    ws.merge_cells(start_row=3, start_column=1, end_row=4, end_column=1)
+    col = 2
+    for name, _audit in regions:
+        c = ws.cell(3, col, name)
+        c.fill = HEADER_FILL; c.font = HEADER_FONT; c.alignment = CENTER; c.border = BORDER
+        ws.merge_cells(start_row=3, start_column=col, end_row=3, end_column=col + 2)
+        for k, sub in enumerate([tr("합계(kgC)"), tr("외삽(kgC)"), tr("외삽 비율(%)")]):
+            cc = ws.cell(4, col + k, sub)
+            cc.fill = SUB_HEADER_FILL; cc.font = Font(bold=True, color="FFFFFF")
+            cc.alignment = CENTER; cc.border = BORDER
+        col += 3
+    for i, yr in enumerate(ref_years):
+        r = i + 5
+        c = ws.cell(r, 1, int(yr)); c.alignment = CENTER; c.border = BORDER
+        col = 2
+        for _name, audit in regions:
+            if audit is not None and i < len(audit["total"]):
+                _num(ws.cell(r, col), round(float(audit["total"][i]), 2))
+                _num(ws.cell(r, col + 1), round(float(audit["extrapolated"][i]), 2))
+                _num(ws.cell(r, col + 2), round(float(audit["share"][i]), 2), "0.00")
+            else:
+                for k in range(3):
+                    ws.cell(r, col + k).border = BORDER
+            col += 3
+    _set_widths(ws, [12] + [14, 14, 13] * len(regions))
+    ws.freeze_panes = ws.cell(5, 2)
+
+
 # ─────────────────────────── 생존률 반영 시트 ───────────────────────────
 
 def _survival_series(cat_payload: dict):
@@ -298,9 +676,9 @@ def _sheet_survival_all(wb: Workbook, payloads: list) -> None:
 # ─────────────────────────── 진입점 (단일 지역) ───────────────────────────
 
 def export_carbon1_to_excel(path: str, payload: dict) -> None:
-    """payload 를 4개 시트(.xlsx)로 저장(그래프 이미지 포함). 실패 시 예외를 그대로 전파.
+    """payload 를 7개 시트(.xlsx)로 저장(그래프 이미지 포함). 실패 시 예외를 그대로 전파.
 
-    Sheets: 추정_교목 · 추정_관목 · 기여도 · 그래프
+    Sheets: 추정_교목 · 추정_관목 · 기여도 · 생존률_반영 · 계산근거 · 적합범위_점검 · 그래프
     """
     wb = Workbook()
     # 첫 번째 시트(Workbook 기본 활성 시트)를 교목 추정으로 사용
@@ -310,6 +688,8 @@ def export_carbon1_to_excel(path: str, payload: dict) -> None:
     _sheet_projection(wb, payload, "shrub", tr("관목"))
     _sheet_contribution(wb, payload)
     _sheet_survival_single(wb, payload)
+    _sheet_details(wb, [payload])
+    _sheet_audit_single(wb, payload)
     _sheet_graphs(wb, payload)
     wb.save(path)
 
@@ -659,9 +1039,10 @@ def _sheet_all_graphs(wb: Workbook, payloads: list, comparison_data: list) -> No
 # ─────────────────────────── 진입점 (전체 지역 통합) ───────────────────────────
 
 def export_all_regions_to_excel(path: str, payloads: list, comparison_data: list) -> None:
-    """모든 지역 통합 결과를 4개 시트(.xlsx)로 저장. 실패 시 예외를 그대로 전파.
+    """모든 지역 통합 결과를 7개 시트(.xlsx)로 저장. 실패 시 예외를 그대로 전파.
 
-    Sheets: 지역별_추정치 · 탄소_기여도 · 지역_비교분석 · 그래프
+    Sheets: 지역별_추정치 · 탄소_기여도 · 생존률_반영 · 지역_비교분석 · 계산근거 ·
+            적합범위_점검 · 그래프
 
     Args:
         payloads:        각 지역의 export payload 리스트 (region, tree, shrub, images 포함).
@@ -673,5 +1054,7 @@ def export_all_regions_to_excel(path: str, payloads: list, comparison_data: list
     _sheet_all_contributions(wb, payloads)
     _sheet_survival_all(wb, payloads)
     _sheet_comparison(wb, comparison_data)
+    _sheet_details(wb, payloads, with_site=True)
+    _sheet_audit_all(wb, payloads)
     _sheet_all_graphs(wb, payloads, comparison_data)
     wb.save(path)
