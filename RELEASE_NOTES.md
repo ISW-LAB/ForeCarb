@@ -3,10 +3,11 @@
 FORECAST-SW v1.1 (ForeCarb v1.1) is the source revision prepared for the
 revised SoftwareX manuscript. It adds the audit and provenance features requested
 in peer review; the allometric equations, coefficients, carbon fractions and
-growth increments of the equation library are unchanged, and every value of the
-manuscript examples computed with v1.0 is reproduced.
+growth increments of the equation library are unchanged. Year-0 stocks of the
+manuscript examples are the same as in v1.0; projected stocks differ because
+growth is now held at the upper fitted limit of each equation (see below).
 
-The release is tagged `v1.1`, which is the version cited in the manuscript; it does not include rebuilt v1.1 binaries. The documentation follows the manuscript: the source compilation defines the response of the 22 core equations as the dry weight of the whole individual (total biomass), and the planting-area defaults are based on crown widths measured in our young-tree and shrub sampling. The README presents the six figures and five tables of the manuscript, lists its main contributions, and summarizes its Discussion under "Limitations and future improvements".
+The release is tagged `v1.1`, which is the version cited in the manuscript; it does not include rebuilt v1.1 binaries. The documentation follows the manuscript: the source compilation defines the response of the 22 core equations as the dry weight of the whole individual (total biomass), and the planting-area defaults are based on crown widths measured in our young-tree and shrub sampling. The README presents the figures and tables of the manuscript, lists its main contributions, and summarizes its Discussion under "Limitations and future improvements".
 
 ## Growth held at the upper fitted limit
 
