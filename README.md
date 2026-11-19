@@ -188,7 +188,7 @@ v_i(t) = 1 if D_min,i ≤ D_i(t) ≤ D_max,i, else 0                       … E
 - `q_i` belongs to the equation record, so overrides (`a_i`, `b_i`, `CF_i`) never change it.
 - Eq. (3): total stock is **independent of site area**; density varies **inversely** with it.
 - Eq. (2): `α_tree` and `α_shrub` are user settings (**Settings → Planting-area safeguard**; kept for later sessions and written to the report). The defaults correspond to a spacing of 1 m × 1 m and 0.5 m × 0.5 m. They only decide whether the calculation proceeds and never enter the biomass or carbon calculation.
-- Growth stops at the upper fitted limit: `D_i(t) = min(D_i(t−1) + g_i, D_max,i)`, so every estimate is evaluated within the fitted range. Eq. (5) flags the records held at that limit. The year-based plots draw them with dotted lines and open markers, shade their part of the total and print their share at year 30; the line above each plot gives the share for the selected year. The XLSX report records the first year each record reaches its upper limit (`Calculation_details`) and the stock and share held at the limit for every year (`Fitted_range_audit`). Records whose source publishes no fitted range grow for the whole period and are reported as not auditable.
+- Growth stops at the upper fitted limit: `D_i(t) = min(D_i(t−1) + g_i, D_max,i)`, so every estimate is evaluated within the fitted range. The year-based plots show the resulting trajectories. Eq. (5) flags the records held at that limit in the XLSX report, which records the first year each record reaches its upper limit (`Calculation_details`) and the stock and share held at the limit for every year (`Fitted_range_audit`). Records whose source publishes no fitted range grow for the whole period and are reported as not auditable.
 - Domestic/international records use `Y_i = f_i(X_i, H_i)` via an AST allowlist (no Python `eval`). Storing no carbon fraction or increments, they apply a fixed **CF₀ = 0.5** and use an assumed 2% annual increase of the first predictor for exploratory scenarios. This is not a measured species-specific growth rate; see [GROWTH_ASSUMPTIONS.md](GROWTH_ASSUMPTIONS.md).
 
 #### Survival-adjusted results (optional)
@@ -226,7 +226,7 @@ The manager maintains records from four collections. Figure 2 shows the interfac
   <img src="figures/paper/fig3_assessment_workflow.png" alt="Integrated assessment workflow for Profile 1" width="100%">
 </p>
 
-> **Figure 3.** Profile 1 dashboard at year 15 (top), displaying 797.72 kg C (year 0: 198.89 kg C); (a) entry dialog with the selected equation and editable parameters; (b) trajectories and species contributions; (c) simulated 3D stand.
+> **Figure 3.** Integrated assessment of Profile 1: (a) dashboard at year 15 with the trajectories and species contributions, displaying 797.72 kg C (year 0: 198.89 kg C); (b) entry dialog with the selected equation and its parameters; (c) simulated 3D stand at year 0.
 
 Profile 1 — three tree and two shrub species on a 20 m × 20 m site.
 
@@ -274,7 +274,7 @@ The scenario illustrates how prescribed diameter increments translate into chang
 | 15 | 763.85 | 33.87 | **797.72** | 4.2 % |
 | 30 | 3,029.89 | 33.87 | **3,063.76** | 39.5 % |
 
-**Growth stops at the upper fitted limits.** Initial-diameter validation applies only to year 0, so projected diameters would eventually leave the fitted ranges. ForeCarb therefore holds each diameter at the upper fitted limit of its equation. In Profile 1 three of the five records reach this limit: *Rhododendron yedoense* f. *poukhanense* in year 4 (2.2 cm), *Weigela subsessilis* in year 9 (3.9 cm) and *Pinus densiflora* in year 30 (15 cm). Their stocks are constant afterwards; the year-based plots and the annual audit in the XLSX report mark them and report their share. Its size, and what it means for long-horizon totals, is discussed under [Limitations and future improvements](#limitations-and-future-improvements). The 3D views are software-defined scenario geometry, not measured plant architecture.
+**Growth stops at the upper fitted limits.** Initial-diameter validation applies only to year 0, so projected diameters would eventually leave the fitted ranges. ForeCarb therefore holds each diameter at the upper fitted limit of its equation. In Profile 1 three of the five records reach this limit: *Rhododendron yedoense* f. *poukhanense* in year 4 (2.2 cm), *Weigela subsessilis* in year 9 (3.9 cm) and *Pinus densiflora* in year 30 (15 cm). Their stocks are constant afterwards; the annual audit in the XLSX report records them and their share of the stock. Its size, and what it means for long-horizon totals, is discussed under [Limitations and future improvements](#limitations-and-future-improvements). The 3D views are software-defined scenario geometry, not measured plant architecture.
 
 ### 4.5 Two-level record validation and planting-area safeguard
 

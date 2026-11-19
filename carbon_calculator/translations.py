@@ -726,18 +726,7 @@ EN.update({
         "Equation ID = collection (T tree, S shrub, D domestic, I international) + position in "
         "the library. It is also written to the Excel report.",
 
-    # ── 적합범위 점검 (그래프 · 안내) ──
-    "{year}년 상한 고정 비율: {share:.1f} %":
-        "Share held at the upper limit at year {year}: {share:.1f} %",
-    "대상지 전체 상한 고정 비율: {share:.1f} %":
-        "Whole-site share held at the upper limit: {share:.1f} %",
-    "{year}년: 적합범위 상한에 고정된 {n}개 항목 — {kind} 저장량의 {share:.1f} %, 대상지 전체의 {site:.1f} %":
-        "Year {year}: {n} record(s) held at the upper fitted limit — {share:.1f} % of the "
-        "{kind} stock, {site:.1f} % of the site total",
-    "{year}년: {kind} 항목이 모두 적합범위 상한 아래 (첫 상한 도달: {first}년)":
-        "Year {year}: all {kind} records are below the upper fitted limits (first limit reached: year {first})",
-    "유효범위 미제공 {n}개 항목은 점검 불가":
-        "{n} record(s) without a published fitted range cannot be audited",
+    # ── 그래프 표시 옵션 (plotting.plot_multi_projection 의 선택 인자) ──
     "적합범위 상한에 고정":
         "Held at upper fitted limit",
     "합계 중 상한 고정분":

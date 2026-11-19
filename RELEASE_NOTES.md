@@ -16,14 +16,16 @@ The release is tagged `v1.1`, which is the version cited in the manuscript; it d
   (`carbon_calculator/projections.py`, `carbon_calculator/extrapolation.py`).
   No estimate is obtained by extrapolation. Records without a published range
   grow for the whole period.
-- The audit flag `v_i(t)` is 0 for a record held at its upper limit. The plots,
-  the line above each plot and the XLSX report show these records and their
-  share of the stock instead of an extrapolated share.
+- The audit flag `v_i(t)` is 0 for a record held at its upper limit. The XLSX
+  report shows these records and their share of the stock instead of an
+  extrapolated share. The year-based plots show the trajectories only, without
+  limit markings, shading, share box or note line.
 - Profile 1 totals are 198.89, 797.72 and 3,063.76 kg C at years 0, 15 and 30
   (900.20 and 3,444.50 kg C before the limit); the share held at the limit is
   39.5 % at year 30; the limits are reached in years 4, 9 and 30.
 - The items below describe the audit as first released; where they mention
-  extrapolated estimates, read "records held at the upper fitted limit".
+  extrapolated estimates, read "records held at the upper fitted limit". The
+  plot markings described there were removed.
 
 ## Fitted-range audit of growth scenarios
 

@@ -1792,7 +1792,6 @@ class MainWindow(QMainWindow):
                 marker.set_xdata([year, year])
                 getattr(self, f"{kind}_canvas").draw_idle()
         self._set_top_carbon_display(*totals, sum(totals), visualization_scale=True)
-        self._refresh_extrapolation_notes(year)
         self._refresh_survival_gauges(year)
         for kind in ("tree", "shrub"):
             marker = getattr(self, f"_{kind}_survival_marker", None)
@@ -1980,39 +1979,6 @@ class MainWindow(QMainWindow):
             [e.curve for e in entries], [e.inside for e in entries],
             length=(len(years) if years is not None else 0))
 
-    def _refresh_extrapolation_notes(self, year: int) -> None:
-        """연도별 그래프 위 안내: 선택한 연차에 적합범위 상한에 고정된 항목의 비율."""
-        site = self._extrapolation_summary()
-        for kind in ("tree", "shrub"):
-            note = getattr(self, f"_{kind}_basis_note", None)
-            if note is None:
-                continue
-            entries = [e for e in getattr(self, f"_{kind}_entries") if e.curve is not None]
-            parts: List[str] = []
-            if entries and year < len(site.total):
-                summary = self._extrapolation_summary(kind)
-                kind_label = tr("교목") if kind == "tree" else tr("관목")
-                outside_now = sum(1 for e in entries
-                                  if e.inside is not None and not bool(e.inside[year]))
-                first_years = [e.first_outside for e in entries if e.first_outside is not None]
-                if outside_now:
-                    parts.append(
-                        tr("{year}년: 적합범위 상한에 고정된 {n}개 항목 — {kind} 저장량의 {share:.1f} %, "
-                           "대상지 전체의 {site:.1f} %")
-                        .format(year=year, n=outside_now, kind=kind_label,
-                                share=summary.share_at(year), site=site.share_at(year)))
-                elif first_years:
-                    parts.append(tr("{year}년: {kind} 항목이 모두 적합범위 상한 아래 (첫 상한 도달: {first}년)")
-                                 .format(year=year, kind=kind_label, first=min(first_years)))
-                    if site.extrapolated[year] > 0:
-                        parts.append(tr("대상지 전체 상한 고정 비율: {share:.1f} %")
-                                     .format(share=site.share_at(year)))
-                unassessed = sum(1 for e in entries if e.inside is None)
-                if unassessed:
-                    parts.append(tr("유효범위 미제공 {n}개 항목은 점검 불가").format(n=unassessed))
-            note.setText(" · ".join(parts))
-            note.setVisible(bool(parts))
-
     def _build_legend(self, kind: str, entries: List[_Entry], basis: str = BASIS_YEAR) -> None:
         """추정 그래프 위에 항목별 표시 체크박스 + '총 탄소저장량' 체크박스를 동적으로 구성.
 
@@ -2085,55 +2051,34 @@ class MainWindow(QMainWindow):
             canvas.show_message(tr("{kind} 정보 없음").format(kind=label_kr))
             return
 
+        # 직경은 적합범위 상한에서 멈추므로(project_record) 곡선은 그대로 그린다.
+        # 상한 도달 여부는 그래프에 표시하지 않고 XLSX 보고서에만 기록한다.
         series: list = []
-        outside: list = []      # series 와 같은 순서 — 연도별 '적합범위 상한에 고정' 여부
         for e, cb in plottable:
             if cb.isChecked():
                 series.append((e.label, years, e.curve, False))
-                outside.append(None if e.inside is None else ~e.inside)
 
         # '총 탄소저장량' = 연도축에 그릴 수 있는 항목의 연도별 합.
         # 그릴 수 있는 항목이 1개뿐이면 개별 곡선과 같아지므로 합계는 생략한다.
-        summary = self._extrapolation_summary(kind)
-        extrapolated_part = None
         if total_cb is not None and total_cb.isChecked() and len(plottable) >= 2:
             summed = self._sum_carbon([e.curve for e, _cb in plottable])
             if summed is not None:
                 series.append((tr("총 탄소저장량"), years, summed, True))
-                outside.append(None)
-                extrapolated_part = summary.extrapolated
 
         if not series:
             canvas.show_message(
                 tr("{kind}: 표시할 항목을 선택하세요 (그래프 위 체크박스)").format(kind=label_kr))
             return
 
-        # 마지막 연차의 상한 고정 비율을 그래프 안에 적는다 (내보낸 그림에도 그대로 남는다).
-        final_year = int(years[-1])
-        extrapolation_note = None
-        if len(summary.total) and summary.extrapolated[-1] > 0:
-            extrapolation_note = (
-                tr("{year}년 상한 고정 비율: {share:.1f} %")
-                .format(year=final_year, share=summary.share_at(final_year)))
-        site_summary = self._extrapolation_summary()
-        if len(site_summary.total) and site_summary.extrapolated[-1] > 0:
-            site_note = tr("대상지 전체 상한 고정 비율: {share:.1f} %").format(
-                share=site_summary.share_at(final_year))
-            extrapolation_note = "\n".join(filter(None, (extrapolation_note, site_note)))
-
         # 제목은 패널 상단 라벨로 표시하므로 축 제목은 끈다 (그래프 영역 확보).
         canvas.plot_multi_projection(
             series,
             tr("[{kind}] 향후 30년 탄소저장량 변동 추정").format(kind=label_kr),
             show_title=False,
-            outside=outside,
-            extrapolated=extrapolated_part,
-            extrapolation_note=extrapolation_note,
         )
         marker = canvas.ax.axvline(self.year_slider.value(), color="#C0392B", linestyle="--")
         setattr(self, f"_{kind}_year_marker", marker)
         canvas.draw_idle()
-        self._refresh_extrapolation_notes(self.year_slider.value())
 
     def _render_diameter_projection(self, kind: str, canvas, entries: List[_Entry],
                                     checks: List[QCheckBox], total_cb, label_kr: str,

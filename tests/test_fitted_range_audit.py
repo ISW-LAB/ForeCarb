@@ -254,12 +254,6 @@ class ReportTests(unittest.TestCase):
             window.on_calculate()
             self.assertEqual(messages, [])
             window.year_slider.setValue(30)
-            self.assertIn("39.5", window._tree_basis_note.text())
-            self.assertIn("38.8", window._tree_basis_note.text())
-            self.assertIn("100.0", window._shrub_basis_note.text())
-            window.year_slider.setValue(3)
-            self.assertIn(tr("{year}년: {kind} 항목이 모두 적합범위 상한 아래 (첫 상한 도달: {first}년)")
-                          .format(year=3, kind=tr("관목"), first=4), window._shrub_basis_note.text())
             payload = window.build_export_payload()
             with TemporaryDirectory() as tmp:
                 path = str(Path(tmp) / "profile1.xlsx")
@@ -310,7 +304,6 @@ class ReportTests(unittest.TestCase):
             window.on_calculate()
             self.assertEqual(len(messages), 1)
             payload = window.build_export_payload()
-            note = window._tree_basis_note.text()
             with TemporaryDirectory() as tmp:
                 single = str(Path(tmp) / "single.xlsx")
                 export_carbon1_to_excel(single, payload)
@@ -319,7 +312,6 @@ class ReportTests(unittest.TestCase):
                 export_all_regions_to_excel(combined, [payload], [])
                 wb_all = load_workbook(combined, data_only=True)
 
-        self.assertIn(tr("유효범위 미제공 {n}개 항목은 점검 불가").format(n=1), note)
         details = table_rows(ws, tr("구분"), tr("식 ID"))
         self.assertEqual([row[tr("식 ID")] for row in details], ["T01", "D21", "D01"])
         self.assertEqual(details[0][tr("계수 변경")], "a: 0.0737 → 0.08; CF: 0.5 → 0.47")
@@ -375,22 +367,29 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(len(table_rows(wb[tr("계산근거")], tr("구분"), tr("식 ID"))), 1)
         self.assertEqual(wb_all[tr("적합범위_점검")].cell(4, 1).value, tr("추정 데이터가 없습니다."))
 
-    def test_figures_mark_records_held_at_the_upper_limit(self) -> None:
+    def test_year_plots_show_the_trajectories_only(self) -> None:
+        # Growth stops at the upper fitted limit; the year plots carry no limit annotations.
         with assessment_window(region_name="Profile 1", area_w=20, area_h=20) as (window, _messages):
             for kind, key, diameter, count in PROFILE_1:
                 window._append_row(kind, key, diameter, count)
             window.on_calculate()
-            for canvas, share in ((window.tree_canvas, "38.8"), (window.shrub_canvas, "100.0")):
+            for canvas, note in ((window.tree_canvas, window._tree_basis_note),
+                                 (window.shrub_canvas, window._shrub_basis_note)):
                 legend = [t.get_text() for t in canvas.ax.get_legend().get_texts()]
-                self.assertIn(tr("적합범위 상한에 고정"), legend)
-                self.assertIn(tr("합계 중 상한 고정분"), legend)
-                notes = [t.get_text() for t in canvas.ax.texts]
-                self.assertIn(tr("{year}년 상한 고정 비율: {share:.1f} %").format(year=30, share=float(share)),
-                              "\n".join(notes))
-                self.assertIn(tr("대상지 전체 상한 고정 비율: {share:.1f} %").format(share=39.5),
-                              "\n".join(notes))
-            window.year_slider.setValue(15)
-            self.assertIn("4.2", window._tree_basis_note.text())
+                self.assertNotIn(tr("적합범위 상한에 고정"), legend)
+                self.assertNotIn(tr("합계 중 상한 고정분"), legend)
+                self.assertIn(tr("총 탄소저장량"), legend)
+                self.assertEqual([t.get_text() for t in canvas.ax.texts if t.get_text()], [])
+                self.assertEqual(len(canvas.ax.collections), 0)      # no shaded area
+                self.assertEqual({line.get_linestyle() for line in canvas.ax.lines
+                                  if line.get_label() in legend}, {"-", "--"})
+                window.year_slider.setValue(15)
+                self.assertFalse(note.isVisibleTo(window))
+                self.assertEqual(note.text(), "")
+            # The trajectory of the shrub held at its limit is flat from that year on.
+            s02 = window._shrub_entries[0]
+            self.assertEqual(s02.first_outside, 4)
+            self.assertEqual(len(set(round(float(c), 9) for c in s02.curve[4:])), 1)
             png = window.figure_png(window.shrub_canvas, (13.5, 6.0))
             self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
             # Rendering for export must leave the on-screen figure size untouched.
