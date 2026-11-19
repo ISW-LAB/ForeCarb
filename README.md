@@ -6,7 +6,7 @@
 
 ForeCarb is an open-source Windows desktop application for assessing live biomass carbon stocks in mixed tree and shrub inventories at forest restoration sites. It combines allometric-equation management, unit-consistent calculation, cross-site comparison, deterministic growth scenarios over a **30-year horizon**, 3D visualization, and XLSX reporting.
 
-This README describes ForeCarb v1.1 and follows the accompanying manuscript. Figures 1–6 and Tables 1–5 match the manuscript; installation, build, and repository guidance is provided below.
+This README describes ForeCarb v1.1 and follows the accompanying manuscript. Figures 1–6 and Tables 1–4 match the revised manuscript; installation, build, and repository guidance is provided below.
 
 **Main contributions**
 
@@ -44,7 +44,7 @@ Python + PyQt5 for Microsoft Windows 10/11. NumPy (computation), Matplotlib (2D 
   <img src="figures/paper/fig1_workflow.png" alt="Software architecture and eight-stage workflow of ForeCarb" width="100%">
 </p>
 
-> **Figure 1.** Software architecture and eight-stage workflow of ForeCarb, from equation-library management to carbon-stock assessment, scenario analysis, and reporting.
+> **Figure 1.** Software architecture and eight-stage workflow of ForeCarb from equation-library management (stages 1 to 3) to site assessment (stages 4 to 8).
 
 | Stage | Component | Core content |
 |:---:|---|---|
@@ -61,11 +61,11 @@ Python + PyQt5 for Microsoft Windows 10/11. NumPy (computation), Matplotlib (2D 
 
 ## 2. Equation library
 
-The source compilation defines the response of each of the 22 core equations as the dry weight of the whole individual (total biomass), not separate aboveground and belowground components. The underlying data were collected directly in the Republic of Korea by whole-plant sampling (leaves/twigs, branches, stems, and roots): shrubs excavated at experimental nurseries in Sejong (2022–2025); young trees and shrubs from nurseries in Sejong, Jeongeup, Gochang, Yeongdong, Okcheon, Dangjin, Yesan, Yeoju, Sacheon, and Wando; and NIFoS data from burned and quarry restoration sites. Tables 1 and 2 list all 22 records; the [provenance ledger](docs/core_equation_provenance.tsv) lists 24 distinct equations, including all three T01 site variants. The 2025 report documents interval averaging but lacks the raw data needed to independently reconstruct all 66 stored growth increments.
+The 22 core records were assembled from our earlier studies [[12](#ref-12), [25](#ref-25)–[28](#ref-28)] and are not models newly fitted for this study. They are based on destructive biomass sampling in the Republic of Korea: the shrub records derive from the whole-plant excavation of nursery-grown shrubs [[12](#ref-12), [25](#ref-25)–[27](#ref-27)], and the tree records derive from the sampling of young trees at nurseries and restoration sites, as documented for *Pinus densiflora* at quarry restoration sites [[28](#ref-28)]; for the tree records T02–T07, the source data also include national biomass data for major tree species (source 7 in Table 2). In the source studies, the response variable is the dry weight of the whole individual; each core equation therefore estimates total biomass rather than separate aboveground and belowground components. Tables 1 and 2 list all 22 records; the [provenance ledger](docs/core_equation_provenance.tsv) lists 24 distinct equations, including all three T01 site variants. The diameter increments represent interval averages of the species-specific diameter growth observed in earlier projects of the National Institute of Forest Science (NIFoS); they serve as editable scenario inputs, and the available raw data do not permit an independent reconstruction of all 66 increments.
 
 The entry dialog initially displays the first item, or the first matching item after filtering. This is not a scientific recommendation: the user must select the appropriate named equation ID. Coefficient/CF overrides are available for core tree/shrub records only.
 
-**77 equation records covering 67 distinct scientific names.** The primary tree and shrub collections contain 22 core equation records assembled in the 2025 project report from restoration and supporting studies; the domestic and international collections contain 55 equations compiled from published studies. Multiple records are retained for a species when source studies differ in geographic origin, stand condition, or biomass component — *Pinus thunbergii*, for example, has **four records**.
+**77 equation records covering 67 distinct scientific names.** The primary tree and shrub collections contain 22 core equation records assembled from our earlier studies; the domestic and international collections contain 55 equations compiled from published studies. Multiple records are retained for a species when source studies differ in geographic origin, stand condition, or biomass component — *Pinus thunbergii*, for example, has **four records**.
 
 All 77 records are selectable in the site-assessment screen. Each record is filed under the tree or shrub input tab by its **predictor variable** — RCD records are shrubs, the rest are trees — which gives **59 tree** and **18 shrub** records.
 
@@ -135,9 +135,9 @@ All 77 records are selectable in the site-assessment screen. Each record is file
 | S14 | *Ligustrum obtusifolium* | 0.50 | 0.18 / 0.21 / 0.21 | 5 |
 | S15 | *Cornus alba* | 0.50 | 0.29 / 0.26 / 0.26 | 5 |
 
-<sub>CF: carbon fraction; `g1 / g2 / g3`: diameter increments (cm/year) in the three decades. CF and `g` are software inputs.</sub>
+<sub>CF: carbon fraction; `g1 / g2 / g3`: diameter increments (cm/year) in the three decades. The CF values are software defaults, and the increments are editable scenario inputs based on project measurements.</sub>
 
-Source keys follow the 2025 compilation: 1, restoration-tree allometry (NIFoS, 2024); 2, young-tree allometry [28]; 3, garden/urban-shrub factors (KOAGI, 2024); 4, restoration-oak allometry [29]; 5–6, urban biodiversity studies [32, 31]; 7, Korean-tree biomass factors [30]. T01 additionally stores artificial-restoration (`0.0722·X^2.6044`, 1–22 cm, sources 2/4) and quarry (`0.1323·X^2.2619`, 1–25 cm, sources 1/2) variants. Bibliographic details appear in [Equation sources](#equation-sources).
+Sources: 1 and 4, tree data from restoration sites (NIFoS); 2, nursery data for young trees and shrubs (NIFoS); 3, shrub study [[27](#ref-27)]; 5, shrub study [[26](#ref-26)]; 6, shrub study [[25](#ref-25)]; 7, national biomass data for major tree species. NIFoS denotes project data of the National Institute of Forest Science. T01 additionally has artificial-restoration (`0.0722·X^2.6044`, 1–22 cm; sources 2 and 4) and quarry (`0.1323·X^2.2619`, 1–25 cm; sources 1 and 2) variants. Bibliographic details appear in [Equation sources](#equation-sources).
 
 - `g1 / g2 / g3`: annual diameter increment (cm yr⁻¹) in years 1–10, 11–20, and 21–30. **Zero = no prescribed growth** in that period.
 - `X` = DBH for trees, RCD for shrubs, in cm. Shrub equations fitted in mm are written as **`10X`**, with fitted limits converted to cm — the original relationship is preserved without refitting.
@@ -214,7 +214,7 @@ These examples illustrate **software behavior under the tested settings**, not a
   <img width="1059" height="1125" alt="fig2_equation_library" src="https://github.com/user-attachments/assets/fcd2dc99-9dd9-4306-9f7c-27363815fa5d" />
 </p>
 
-> **Figure 2.** Equation-library management in ForeCarb, including record configuration, parameter editing, and deployment of the validated library.
+> **Figure 2.** Equation-library configuration and deployment in ForeCarb.
 
 The manager maintains records from four collections. Figure 2 shows the interface organized by restoration-site category, with tree and shrub subtabs and editable columns for coefficients, carbon fractions, fitted limits, and growth increments.
 
@@ -226,11 +226,11 @@ The manager maintains records from four collections. Figure 2 shows the interfac
   <img src="figures/paper/fig3_assessment_workflow.png" alt="Integrated assessment workflow for Profile 1" width="100%">
 </p>
 
-> **Figure 3.** Integrated assessment of Profile 1: (a) dashboard at year 15 with the trajectories and species contributions, displaying 797.72 kg C (year 0: 198.89 kg C); (b) entry dialog with the selected equation and its parameters; (c) simulated 3D stand at year 0.
+> **Figure 3.** Integrated assessment of Profile 1, including mixed tree and shrub inventories, carbon-stock analysis, and 3D visualization. (a) Dashboard with the year slider set to year 0, which displays the initial stock of 198.89 kg C (Table 3); (b) entry dialog with the selected equation and its parameters; (c) 3D view of the stand at year 0.
 
-Profile 1 — three tree and two shrub species on a 20 m × 20 m site.
+Profile 1 demonstrates the integrated assessment of three tree and two shrub species on a 20 m × 20 m site. Table 3 lists the inputs and results of this profile together with the equation ID of each record. The site category is a post-fire site with natural restoration, the CF is 0.50, and the growth increments follow Table 2.
 
-The upper overview shows the main workspace, including inventory entry and tree, shrub, and total carbon stocks at the selected scenario year. The labeled panels show **(a)** the tree/shrub entry dialog with the resolved equation, coefficients, carbon fraction, fitted range, and increments; **(b)** the 0–30-year carbon-stock trajectory and species contributions; and **(c)** the 3D stand visualization. A shared year bar synchronizes the scenario views over years 0–30.
+In the dashboard (Figure 3a), the **year slider** (years 0–30) selects the year to be displayed. The horizontal bars and values at the top give the tree, shrub, and total carbon stocks of that year, the dashed vertical line marks the year on the trajectory plot, and the pie chart gives the species contributions in that year; the light part of each bar shows the stock with all individuals surviving, and the dark part shows the survival-adjusted stock. Because the slider is set to year 0, the values at the top equal the year-0 stocks listed in the result tables below the plots (198.89 kg C in total); when another year is selected, the values at the top change, whereas the result tables continue to list the year-0 stocks calculated from the measured diameters. The entry dialog (Figure 3b) displays the equation ID, the selected equation, its fitted range, and its diameter increments, and the coefficients and CF can be edited for the record. The 3D view (Figure 3c) follows the same slider and is shown for year 0.
 
 ### 4.3 Area-aware cross-site comparison
 
@@ -238,22 +238,35 @@ Designed to separate variation from **inventory composition** from that introduc
 
 #### Table 3. Controlled inventories and outputs for the cross-site comparisons in Figure 4
 
-| Comparison | Profile | Site area (m²) | Tree records | Shrub records | Stock (kg C) | Density (kg C m⁻²) |
-|---|:---:|:---:|---|---|---:|---:|
-| **(1) Common area** | 1 | 400 | *P. densiflora* 5.0 × 30;<br>*Q. serrata* 4.0 × 20;<br>*Q. mongolica* 8.0 × 15 | *R. yedoense* f. *poukhanense* 1.2 × 40;<br>*W. subsessilis* 1.5 × 25 | 198.89 | 0.4972 |
-| | 2 | 400 | *P. densiflora* 7.0 × 60;<br>*Q. serrata* 8.0 × 25;<br>*Q. mongolica* 10.0 × 15 | *W. subsessilis* 1.5 × 25 | **824.88** | 2.0622 |
-| | 3 | 400 | *Q. serrata* 4.0 × 20;<br>*Q. mongolica* 6.0 × 10 | *R. yedoense* f. *poukhanense* 1.8 × 120;<br>*W. subsessilis* 2.0 × 90 | **109.08** | 0.2727 |
-| **(2) Common inventory** | 1 | 400 | *P. densiflora* 5.0 × 30;<br>*Q. serrata* 4.0 × 20;<br>*Q. mongolica* 8.0 × 15 | *R. yedoense* f. *poukhanense* 1.2 × 40;<br>*W. subsessilis* 1.5 × 25 | 198.89 | **0.4972** |
-| | 2 | 500 | *(unchanged)* | *(unchanged)* | 198.89 | **0.3978** |
-| | 3 | 600 | *(unchanged)* | *(unchanged)* | 198.89 | **0.3315** |
+| Comparison | Profile | Site area (m²) | ID | Record | D (cm) | n | C(0) (kg C) | C(30) (kg C) | Density (kg C m⁻²) |
+|---|:---:|:---:|:---:|---|---:|---:|---:|---:|---:|
+| **(1) Common area** | 1 | 400 | T01 | *Pinus densiflora* | 5.0 | 30 | 69.56 | 1,175.52 | |
+|  |  |  | T04 | *Quercus serrata* | 4.0 | 20 | 54.00 | 637.26 | |
+|  |  |  | T07 | *Quercus mongolica* | 8.0 | 15 | 70.59 | 1,217.11 | |
+|  |  |  | S02 | *Rhododendron yedoense* f. *poukhanense* | 1.2 | 40 | 2.33 | 10.00 | |
+|  |  |  | S10 | *Weigela subsessilis* | 1.5 | 25 | 2.41 | 23.87 | |
+| | | | | **Site total** | | | **198.89** | **3,063.76** | 0.4972 |
+|  | 2 | 400 | T01 | *Pinus densiflora* | 7.0 | 60 | 330.71 | 2,351.04 | |
+|  |  |  | T04 | *Quercus serrata* | 8.0 | 25 | 350.55 | 1,636.93 | |
+|  |  |  | T07 | *Quercus mongolica* | 10.0 | 15 | 141.21 | 1,636.65 | |
+|  |  |  | S10 | *Weigela subsessilis* | 1.5 | 25 | 2.41 | 23.87 | |
+| | | | | **Site total** | | | **824.88** | **5,648.49** | 2.0622 |
+|  | 3 | 400 | T04 | *Quercus serrata* | 4.0 | 20 | 54.00 | 637.26 | |
+|  |  |  | T07 | *Quercus mongolica* | 6.0 | 10 | 19.25 | 584.85 | |
+|  |  |  | S02 | *Rhododendron yedoense* f. *poukhanense* | 1.8 | 120 | 18.53 | 30.00 | |
+|  |  |  | S10 | *Weigela subsessilis* | 2.0 | 90 | 17.30 | 85.93 | |
+| | | | | **Site total** | | | **109.08** | **1,338.04** | 0.2727 |
+| **(2) Common inventory** | 1 | 400 | | Inventory of Profile 1 | | | 198.89 | 3,063.76 | **0.4972** |
+|  | 2 | 500 | | Inventory of Profile 1 | | | 198.89 | 3,063.76 | **0.3978** |
+|  | 3 | 600 | | Inventory of Profile 1 | | | 198.89 | 3,063.76 | **0.3315** |
 
-<sub>Diameters are DBH for trees or RCD for shrubs, in cm. The multiplier following each diameter denotes the represented count; profiles are numbered within each comparison.</sub>
+<sub>ID: equation ID; `D`: tree DBH or shrub RCD at year 0; `n`: represented count; `C(0)` and `C(30)`: carbon stocks at years 0 and 30 (CF 0.50). The density refers to year 0.</sub>
 
 <p align="center">
   <img src="figures/paper/fig4_site_comparison.png" alt="Cross-site comparison of total carbon stock and carbon density" width="100%">
 </p>
 
-> **Figure 4.** Cross-site comparison of total carbon stock and area-normalized carbon density using three inventories at a common site area and one unchanged inventory across different site areas.
+> **Figure 4.** Cross-site comparison of total carbon stock and area-normalized carbon density under common-area and common-inventory settings.
 
 - **(a) Common area** — holding site area at 400 m² isolates inventory composition: **109.08 → 824.88 kg C** across the three inventories, reflecting differences in species composition, initial diameter, and represented count.
 - **(b) Common inventory** — applying Profile 1 to 400 / 500 / 600 m² isolates site area: total stock **stays 198.89 kg C**, density falls **0.4972 → 0.3978 → 0.3315 kg C m⁻²**.
@@ -266,7 +279,7 @@ The scenario illustrates how prescribed diameter increments translate into chang
   <img src="figures/paper/fig5_growth_3d.png" alt="Simulated 3D stands of Profile 1 at years 0 and 30" width="100%">
 </p>
 
-> **Figure 5.** Deterministic growth scenario for Profile 1 at year 0 (a) and year 30 (b) with simulated 3D stands. Diameters stop growing at the upper fitted limits, so the stocks shown contain no extrapolation. Geometry is software-defined.
+> **Figure 5.** Deterministic growth scenario for Profile 1 at (a) year 0 and (b) year 30 with corresponding 3D stand visualizations. The 3D stands are simulated: their geometry is defined by the software and does not represent observed growth. The diameters stop growing at the upper fitted limits of the equations, so that the stocks shown contain no extrapolation.
 
 | Year | Trees (kg C) | Shrubs (kg C) | **Total (kg C)** | Share held at upper limit |
 |:---:|---:|---:|---:|---:|
@@ -274,7 +287,7 @@ The scenario illustrates how prescribed diameter increments translate into chang
 | 15 | 763.85 | 33.87 | **797.72** | 4.2 % |
 | 30 | 3,029.89 | 33.87 | **3,063.76** | 39.5 % |
 
-**Growth stops at the upper fitted limits.** Initial-diameter validation applies only to year 0, so projected diameters would eventually leave the fitted ranges. ForeCarb therefore holds each diameter at the upper fitted limit of its equation. In Profile 1 three of the five records reach this limit: *Rhododendron yedoense* f. *poukhanense* in year 4 (2.2 cm), *Weigela subsessilis* in year 9 (3.9 cm) and *Pinus densiflora* in year 30 (15 cm). Their stocks are constant afterwards; the annual audit in the XLSX report records them and their share of the stock. Its size, and what it means for long-horizon totals, is discussed under [Limitations and future improvements](#limitations-and-future-improvements). The 3D views are software-defined scenario geometry, not measured plant architecture.
+**Growth stops at the upper fitted limits.** Initial-diameter validation applies only to year 0, so projected diameters would eventually leave the fitted ranges. ForeCarb therefore holds each diameter at the upper fitted limit of its equation. In Profile 1, three records reach these limits: *Rhododendron yedoense* f. *poukhanense* (S02) in year 4 (2.2 cm), *Weigela subsessilis* (S10) in year 9 (3.9 cm), and *Pinus densiflora* (T01) in year 30 (15 cm), and their stocks remain constant thereafter. In Profile 2, the limits are reached by S10 in year 9 and by T01 in year 28, and in Profile 3, by S02 in year 2 and by S10 in year 7; the annual audit in the XLSX report records them and their share of the stock. Its size, and what it means for long-horizon totals, is discussed under [Limitations and future improvements](#limitations-and-future-improvements). The 3D views are software-defined scenario geometry, not measured plant architecture.
 
 ### 4.5 Two-level record validation and planting-area safeguard
 
@@ -294,28 +307,6 @@ The scenario illustrates how prescribed diameter increments translate into chang
 
 Values outside the fitted ranges were rejected and values at the limits accepted; records bypassing the entry check were excluded during calculation; the area safeguard halted calculation only when the requirement **exceeded** the site area.
 
-#### Record-level inputs and outputs of Profiles 1–3 (common-area inventories of Table 3; CF 0.50)
-
-| Profile | ID | Record | D(0) (cm) | n | B(0) (kg) | C(0) (kg C) | D(30) (cm) | C(30) (kg C) | First year at upper limit |
-|:---:|:---:|---|---:|---:|---:|---:|---:|---:|:---:|
-| 1 | T01 | *Pinus densiflora* | 5.0 | 30 | 4.637 | 69.56 | 15.0 | 1,175.52 | 30 |
-|  | T04 | *Quercus serrata* | 4.0 | 20 | 5.400 | 54.00 | 11.3 | 637.26 | – |
-|  | T07 | *Quercus mongolica* | 8.0 | 15 | 9.412 | 70.59 | 20.0 | 1,217.11 | – |
-|  | S02 | *Rhododendron yedoense* f. *poukhanense* | 1.2 | 40 | 0.1167 | 2.33 | 2.2 | 10.00 | 4 |
-|  | S10 | *Weigela subsessilis* | 1.5 | 25 | 0.1928 | 2.41 | 3.9 | 23.87 | 9 |
-| | | **Site total** | | | | **198.89** | | **3,063.76** | |
-| 2 | T01 | *Pinus densiflora* | 7.0 | 60 | 11.024 | 330.71 | 15.0 | 2,351.04 | 28 |
-|  | T04 | *Quercus serrata* | 8.0 | 25 | 28.044 | 350.55 | 15.3 | 1,636.93 | – |
-|  | T07 | *Quercus mongolica* | 10.0 | 15 | 18.829 | 141.21 | 22.0 | 1,636.65 | – |
-|  | S10 | *Weigela subsessilis* | 1.5 | 25 | 0.1928 | 2.41 | 3.9 | 23.87 | 9 |
-| | | **Site total** | | | | **824.88** | | **5,648.49** | |
-| 3 | T04 | *Quercus serrata* | 4.0 | 20 | 5.400 | 54.00 | 11.3 | 637.26 | – |
-|  | T07 | *Quercus mongolica* | 6.0 | 10 | 3.850 | 19.25 | 18.0 | 584.85 | – |
-|  | S02 | *Rhododendron yedoense* f. *poukhanense* | 1.8 | 120 | 0.3089 | 18.53 | 2.2 | 30.00 | 2 |
-|  | S10 | *Weigela subsessilis* | 2.0 | 90 | 0.3845 | 17.30 | 3.9 | 85.93 | 7 |
-| | | **Site total** | | | | **109.08** | | **1,338.04** | |
-
-<sub>`D`: DBH/RCD; `n`: count; `B`: individual biomass; `C`: record carbon. `D(30)` is held at the upper fitted limit once it is reached; final column: first year at this limit (–: not reached through year 30).</sub>
 
 ### 4.6 Result reporting
 
@@ -323,7 +314,7 @@ Values outside the fitted ranges were rejected and values at the limits accepted
   <img src="figures/paper/fig6_xlsx_export.png" alt="Example XLSX output from ForeCarb" width="100%">
 </p>
 
-> **Figure 6.** Selected XLSX fields for Profiles 1–3: (a) projected stocks by site and year; (b) year-0 species contributions. Species shares use tree/shrub subtotals. Displayed fields are rearranged; complete workbooks retain all records and years.
+> **Figure 6.** Example XLSX output showing site-level carbon-stock projections and species-level carbon contributions. The calculation details and the annual fitted-range audit described below are stored in separate worksheets of the same report.
 
 **(a)** tree, shrub and total stocks per profile and year · **(b)** species-level stocks and shares. Additional worksheets hold site-comparison results and associated figures.
 
@@ -337,13 +328,13 @@ This section follows the Discussion of the manuscript.
 
 **Limitations**
 
-- **Uniform carbon fraction.** A single CF of 0.50 across trees and shrubs ignores species variation; replacing 0.50 by 0.47 reduces the affected estimates by 6 % (S12 already uses 0.45).
+- **Uniform carbon fraction.** Applying a uniform CF of 0.50 to trees and shrubs ignores variation among species and plant components; for example, carbon concentrations of 45.6–48.7 % were measured in the components of *Grevillea robusta*, close to the IPCC default of 0.47. Replacing 0.50 with 0.47 reduces the affected estimates by 6 % (record S12 uses 0.45).
 - **Fixed growth intervals.** Fixed 10-year increments can obscure rapid early growth and nonlinear age effects in shrubs.
-- **Multi-stem shrubs.** RCD-only models omit stem number and may miss biomass differences between multi-stem individuals of similar diameter.
-- **Fitted ranges.** Growth is stopped at the upper fitted limits to avoid extrapolation (without this limit, 46.2 % of the year-30 stock of Profile 1 would be extrapolated). Records held at a limit contribute constant stocks, so later totals are conservative: in Profile 1 they supply **4.2 %** of the stock at year 15 and **39.5 %** at year 30 (1,209.39 of 3,063.76 kg C; trees 38.8 %, shrubs 100 %), which limits the interpretation of long-horizon totals.
-- **Uncertainty.** Uncertainties in allometric equations, carbon fractions, and growth increments are not propagated; the curves are conditional scenarios rather than confidence intervals.
+- **Multi-stem shrubs.** Equations based only on RCD omit the number of stems and may therefore miss biomass differences between multi-stem individuals of similar diameter.
+- **Fitted ranges.** Growth is stopped at the upper fitted limits to avoid extrapolation; without this limit, 46.2 % of the year-30 stock of Profile 1 would be extrapolated. Records held at a limit contribute constant stocks, so that later totals are conservative: in Profile 1, such records account for **4.2 %** of the stock at year 15 and **39.5 %** at year 30 (1,209.39 of 3,063.76 kg C; 38.8 % for trees and 100 % for shrubs), which limits the interpretation of long-horizon totals.
+- **Uncertainty.** Uncertainties in the allometric equations, carbon fractions, and growth increments are not propagated, so the trajectories are conditional scenarios rather than estimates with confidence intervals.
 
-**Future improvements.** Planned versions will add flexible age-dependent growth functions, species-specific parameters, uncertainty propagation, and independent field validation.
+**Future improvements.** Future versions will replace the piecewise-constant increments with flexible age-dependent growth functions fitted to repeated measurements, so that rapid early growth is represented. Species-specific parameters, including measured carbon fractions, survival rates, and planting densities, will be stored with the equation records as data become available. Uncertainty in the allometric equations, carbon fractions, and growth inputs will be propagated to interval estimates, and the projections will be compared with independent field inventories of restoration sites.
 
 ---
 
@@ -441,7 +432,7 @@ python build_updater.py              # Equation Library Manager (or build_librar
 python -m unittest discover -s tests -v
 ```
 
-22 regression tests reproduce Tables 3–4 and Figures 4–5: library record counts, area-normalized densities (`0.4972 / 0.3978 / 0.3315`), proportional scaling with represented count, diameter boundaries, scenario repeatability and year-zero agreement, shrub mm↔cm equivalence, execution of all 55 compatibility equations, and rejection of unsafe syntax. `tests/test_survival_preset.py` covers survival-adjusted projections (Eq. 6), the data workbook round trip, and the survival worksheet in XLSX exports. The same suite runs in CI on Windows with Python 3.10 and 3.11. `tests/test_fitted_range_audit.py` covers the fitted-range audit (Eq. 5), the extrapolated share and first years outside the fitted range for Profile 1, equation IDs, the `Calculation_details` and `Fitted_range_audit` worksheets, the planting-area settings, and the reproduction of the bundled example workbook. Build environment and checksums: [BUILD_VERIFICATION.md](BUILD_VERIFICATION.md).
+22 regression tests reproduce Tables 3–4 and Figures 4–5: library record counts, area-normalized densities (`0.4972 / 0.3978 / 0.3315`), proportional scaling with represented count, diameter boundaries, scenario repeatability and year-zero agreement, shrub mm↔cm equivalence, execution of all 55 compatibility equations, and rejection of unsafe syntax. `tests/test_survival_preset.py` covers survival-adjusted projections (Eq. 6), the data workbook round trip, and the survival worksheet in XLSX exports. The same suite runs in CI on Windows with Python 3.10 and 3.11. `tests/test_fitted_range_audit.py` covers the upper growth limit and the fitted-range audit (Eq. 5), the share held at the upper limits and the years in which the Profile 1 records reach them, the plain year plots, equation IDs, the `Calculation_details` and `Fitted_range_audit` worksheets, the planting-area settings, and the reproduction of the bundled example workbook. Build environment and checksums: [BUILD_VERIFICATION.md](BUILD_VERIFICATION.md).
 
 ---
 
@@ -492,13 +483,13 @@ Machine-readable metadata: [`CITATION.cff`](CITATION.cff). **When using an indiv
 
 ### Equation sources
 
-Reference numbers follow the bibliography of the accompanying manuscript; the source keys are those of Table 2.
+Reference numbers follow the bibliography of the revised manuscript; source keys are those of Table 2. Sources 1, 2, 4 and 7 are project data of the National Institute of Forest Science and national biomass data without a separate publication.
 
-- <a id="ref-28"></a>**[28]** (source key 2) National Institute of Forest Science (2024). *Development of allometric equations for young trees.* Contract research report.
-- <a id="ref-29"></a>**[29]** (source key 4) National Institute of Forest Science (2023). *Biomass measurement and development of allometric equations for oaks in forest restoration sites.* Research report.
-- <a id="ref-30"></a>**[30]** (source key 7) Korea Forest Research Institute (2014). *Carbon emission factors and biomass allometric equations for major tree species in Korea.* Research report.
-- <a id="ref-31"></a>**[31]** (source key 6) Korea Arboreta and Gardens Institute (2022). *Establishing a foundation for enhancing urban biodiversity.* Research report.
-- <a id="ref-32"></a>**[32]** (source key 5) Korea Arboreta and Gardens Institute (2023). *Research on enhancing biodiversity in urban forests.* Research report.
+- <a id="ref-12"></a>**[12]** Kim, H.-K., Lee, S., Jung, J.-W., Chae, S.-M., Kwon, J.-O., Kwon, Y.-J., & Kim, C.-B. (2026). Optimizing allometric equations for estimating carbon storage of urban shrubs: A morphology-driven machine learning approach and development of an intelligent decision-support system. *Forests*, 17(8), 936.
+- <a id="ref-25"></a>**[25]** (source key 6) Kim, H.-K., Kim, H.-S., Hong, Y.-S., Yoon, Y.-S., Lim, Y.-K., Kang, S.-G., & Kim, C.-B. (2022). Sequestration factors development and comparison of carbon storage and uptake by shrubs for urban forests and gardens: *Buxus sinica*, *Euonymus alatus*, *Euonymus japonicus*, *Rhododendron yedoense* and *Spiraea prunifolia*. *Journal of Korean Institute of Forest Recreation and Welfare*, 26(4), 131–139 (in Korean). https://doi.org/10.34272/forest.2022.26.4.011
+- <a id="ref-26"></a>**[26]** (source key 5) Kim, H.-K., Kim, H.-S., Kwon, K.-W., Moon, H.-J., Kim, S.-H., Hyung, S.-J., Jin, B.-C., & Kim, C.-B. (2024). Development of shrub carbon sequestration factors to improve forest welfare services in gardens and urban forests: *Nandina domestica*, *Weigela subsessilis*, *Callicarpa dichotoma*, *Ligustrum obtusifolium*, *Cornus alba*. *Journal of Korean Institute of Forest Recreation and Welfare*, 28(1), 13–28 (in Korean). https://doi.org/10.34272/forest.2024.28.1.002
+- <a id="ref-27"></a>**[27]** (source key 3) Kim, H.-K., Lee, J., Kang, J., Choi, D., Kang, J., Hwang, Y., Park, D., Pi, J., Kwon, Y., Jin, B., & Kim, C.-B. (2024). Development of allometric equations for carbon storage analysis of shrubs in settlement: *Forsythia koreana* and *Syringa oblata* var. *dilatata* in Sejong-si. *Journal of Environmental Impact Assessment*, 33(6), 422–430 (in Korean). https://doi.org/10.14249/eia.2024.33.6.422
+- <a id="ref-28"></a>**[28]** Im, S., & Park, K.-H. (2025). Development of allometric equations of young *Pinus densiflora* in post-mining forest restoration sites. *Journal of Korean Society of Forest Science*, 114(4), 403–415 (in Korean). https://doi.org/10.14578/jkfs.2025.114.4.403
 
 **Contact**: [kc.jeong-isw@cbnu.ac.kr](mailto:kc.jeong-isw@cbnu.ac.kr) · [gc.jo-isw@cbnu.ac.kr](mailto:gc.jo-isw@cbnu.ac.kr)
 
