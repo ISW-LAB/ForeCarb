@@ -13,8 +13,8 @@ openpyxl 에만 의존하며 PyQt/matplotlib 에 의존하지 않는다(테스�
   지역별_추정치 · 탄소_기여도 · 생존률_반영 · 지역_비교분석 · 계산근거 · 적합범위_점검 · 그래프
 
 계산근거 시트는 행마다 적용한 식(식 ID·식·계수), 사용자가 바꾼 계수, 제외된 입력 행,
-적합범위를 처음 벗어나는 연차를 기록한다. 적합범위_점검 시트는 연도별로 합계 가운데
-적합범위 밖(외삽) 추정이 차지하는 탄소량과 비율을 기록한다. 두 시트가 쓰는 payload
+적합범위 상한에 처음 닿는 연차를 기록한다. 적합범위_점검 시트는 연도별로 합계 가운데
+상한에 고정된 항목이 차지하는 탄소량과 비율을 기록한다(직경은 상한에서 멈추므로 범위 밖 추정은 없다). 두 시트가 쓰는 payload
 항목(`software`, `library`, `planting_area`, `audit`, 행의 `equation_id` 등)은 모두
 선택 항목이라 없으면 빈칸으로 남는다.
 
@@ -246,14 +246,14 @@ def _first_outside_text(row: dict) -> str:
     if row.get("dmin") is None or row.get("dmax") is None:
         return tr("점검 불가 (범위 미제공)")
     first = row.get("first_outside")
-    return tr("없음 (30년까지 범위 안)") if first is None else str(int(first))
+    return tr("없음 (30년까지 상한 아래)") if first is None else str(int(first))
 
 
 def _final_status_text(row: dict) -> str:
     inside = row.get("inside")
     if inside is None:
         return tr("점검 불가 (범위 미제공)")
-    return tr("범위 안") if inside[-1] else tr("외삽 (범위 밖)")
+    return tr("상한 아래") if inside[-1] else tr("상한 고정")
 
 
 def _collection_text(code) -> str:
@@ -265,7 +265,7 @@ def _detail_headers() -> list:
         tr("구분"), tr("식 ID"), tr("컬렉션"), tr("수종"), tr("라이브러리 키"), tr("적용 식"),
         tr("설명변수"), tr("입력값"), tr("식 입력 배율 q"), tr("두 번째 변수"),
         tr("개체 바이오매스(kg)"), "CF", tr("수량"), tr("탄소저장량(kgC)"), tr("계수 변경"),
-        tr("적합범위"), tr("연간 직경 생장량(cm/yr, 1~10/11~20/21~30년)"), tr("범위 이탈 첫 연차"),
+        tr("적합범위"), tr("연간 직경 생장량(cm/yr, 1~10/11~20/21~30년)"), tr("상한 도달 첫 연차"),
         tr("30년 설명변수 값"), tr("30년 탄소저장량(kgC)"), tr("30년 추정 상태"),
     ]
 
@@ -400,7 +400,7 @@ def _sheet_details(wb: Workbook, payloads: list, with_site: bool = False) -> Non
         ws.cell(r, 2, value)
         r += 1
     ws.cell(r, 1, tr("식 ID = 컬렉션(T 교목·S 관목·D 국내·I 국외) + 라이브러리 순번. "
-                     "범위 이탈 첫 연차 = 설명변수 추정값이 적합범위를 처음 벗어나는 해(그 뒤 추정은 외삽).")
+                     "상한 도달 첫 연차 = 설명변수 추정값이 적합범위 상한에 처음 닿아 고정되는 해(그 뒤로는 생장하지 않음).")
             ).font = Font(color="555555")
     r += 2
 
@@ -454,11 +454,11 @@ def _audit_of(cat_payload: dict):
 
 
 def _sheet_audit_single(wb: Workbook, payload: dict) -> None:
-    """적합범위_점검: 연도별 합계와 그 가운데 적합범위 밖(외삽) 추정의 탄소량·비율."""
+    """적합범위_점검: 연도별 합계와 그 가운데 적합범위 상한에 고정된 항목의 탄소량·비율."""
     ws = wb.create_sheet(tr("적합범위_점검"))
-    ws.cell(1, 1, tr("적합범위 점검 — 연도별 외삽 추정의 탄소량과 비율")).font = TITLE_FONT
-    ws.cell(2, 1, tr("v(t) = 1: 그 해의 설명변수 값이 적합범위 안, 0: 범위 밖(외삽). "
-                     "점검은 추정값을 바꾸지 않고 표시만 합니다.")).font = Font(color="555555")
+    ws.cell(1, 1, tr("적합범위 점검 — 연도별 상한 고정 항목의 탄소량과 비율")).font = TITLE_FONT
+    ws.cell(2, 1, tr("v(t) = 1: 그 해의 설명변수 값이 적합범위 상한 아래, 0: 상한에 고정(생장 정지). "
+                     "모든 추정은 적합범위 안에서 계산합니다.")).font = Font(color="555555")
     tree, shrub = _audit_of(payload.get("tree")), _audit_of(payload.get("shrub"))
     site = payload.get("audit") if (payload.get("audit") or {}).get("years") else None
     reference = site or tree or shrub
@@ -487,9 +487,9 @@ def _sheet_audit_single(wb: Workbook, payload: dict) -> None:
             flagged.append((f"v(t): {label}", row.get("inside")))
 
     headers = [tr("경과연도(년)"),
-               tr("교목 합계(kgC)"), tr("교목 외삽(kgC)"),
-               tr("관목 합계(kgC)"), tr("관목 외삽(kgC)"),
-               tr("대상지 합계(kgC)"), tr("대상지 외삽(kgC)"), tr("외삽 비율(%)"),
+               tr("교목 합계(kgC)"), tr("교목 상한 고정(kgC)"),
+               tr("관목 합계(kgC)"), tr("관목 상한 고정(kgC)"),
+               tr("대상지 합계(kgC)"), tr("대상지 상한 고정(kgC)"), tr("상한 고정 비율(%)"),
                tr("범위 미제공(kgC)")] + [label for label, _flags in flagged]
     for c, h in enumerate(headers, 1):
         ws.cell(4, c, h)
@@ -517,10 +517,10 @@ def _sheet_audit_single(wb: Workbook, payload: dict) -> None:
 
 
 def _sheet_audit_all(wb: Workbook, payloads: list) -> None:
-    """통합본 적합범위_점검: 지역별 합계 · 외삽 탄소량 · 외삽 비율(연도별)."""
+    """통합본 적합범위_점검: 지역별 합계 · 상한 고정 탄소량 · 상한 고정 비율(연도별)."""
     ws = wb.create_sheet(tr("적합범위_점검"))
-    ws.cell(1, 1, tr("지역별 적합범위 점검 — 연도별 외삽 추정의 탄소량과 비율")).font = TITLE_FONT
-    ws.cell(2, 1, tr("외삽 = 설명변수 추정값이 적용 식의 적합범위 밖인 해의 추정. "
+    ws.cell(1, 1, tr("지역별 적합범위 점검 — 연도별 상한 고정 항목의 탄소량과 비율")).font = TITLE_FONT
+    ws.cell(2, 1, tr("상한 고정 = 설명변수 추정값이 적용 식의 적합범위 상한에 닿아 생장이 멈춘 항목의 추정. "
                      "행별 표시는 '계산근거' 시트를 보세요.")).font = Font(color="555555")
     regions, ref_years = [], None
     for p in payloads:
@@ -550,7 +550,7 @@ def _sheet_audit_all(wb: Workbook, payloads: list) -> None:
         c = ws.cell(3, col, name)
         c.fill = HEADER_FILL; c.font = HEADER_FONT; c.alignment = CENTER; c.border = BORDER
         ws.merge_cells(start_row=3, start_column=col, end_row=3, end_column=col + 2)
-        for k, sub in enumerate([tr("합계(kgC)"), tr("외삽(kgC)"), tr("외삽 비율(%)")]):
+        for k, sub in enumerate([tr("합계(kgC)"), tr("상한 고정(kgC)"), tr("상한 고정 비율(%)")]):
             cc = ws.cell(4, col + k, sub)
             cc.fill = SUB_HEADER_FILL; cc.font = Font(bold=True, color="FFFFFF")
             cc.alignment = CENTER; cc.border = BORDER

@@ -54,8 +54,8 @@ def summarize_payload(payload: dict) -> dict:
         shrub = _series_sum(payload["shrub"], year)
         stocks[str(year)] = {
             "tree": round(tree, 2), "shrub": round(shrub, 2), "total": round(tree + shrub, 2),
-            "extrapolated": round(float(audit["extrapolated"][year]), 2) if audit else 0.0,
-            "extrapolated_share_pct": round(float(audit["share"][year]), 1) if audit else 0.0,
+            "at_upper_limit": round(float(audit["extrapolated"][year]), 2) if audit else 0.0,
+            "at_upper_limit_share_pct": round(float(audit["share"][year]), 1) if audit else 0.0,
         }
     survival = {}
     for year in CHECK_YEARS:
@@ -73,7 +73,7 @@ def summarize_payload(payload: dict) -> dict:
                 "diameter_cm": row["diameter"],
                 "count": row["quantity"],
                 "carbon_kg": round(float(row["carbon"]), 2),
-                "first_year_outside_range": row["first_outside"],
+                "first_year_at_upper_limit": row["first_outside"],
                 "carbon_year30_kg": round(float(row["final_carbon"]), 2),
             })
     area = float(region["area"])
@@ -178,19 +178,20 @@ def assess_workbook(workbook: Path, out_dir: Path | None = None, language: str =
 
 def _print_summary(name: str, summary: dict) -> None:
     print(f"\n{name}  (site area {summary['site_area_m2']:g} m2)")
-    print("  year      trees     shrubs      total   extrapolated   share")
+    print("  year      trees     shrubs      total   at upper limit   share")
     for year in CHECK_YEARS:
         s = summary["stocks_kg_c"][str(year)]
         print(f"  {year:>4} {s['tree']:>10,.2f} {s['shrub']:>10,.2f} {s['total']:>10,.2f} "
-              f"{s['extrapolated']:>14,.2f} {s['extrapolated_share_pct']:>6.1f} %")
+              f"{s['at_upper_limit']:>16,.2f} {s['at_upper_limit_share_pct']:>6.1f} %")
     print(f"  carbon density at year 0: {summary['density_year0_kg_c_m2']:.4f} kg C m-2")
     survival = summary["with_survival_kg_c"]
     if abs(survival["30"] - summary["stocks_kg_c"]["30"]["total"]) > STOCK_TOLERANCE_KG:
         print("  with survival: " + ", ".join(
             f"year {year}: {survival[str(year)]:,.2f} kg C" for year in CHECK_YEARS))
     for record in summary["records"]:
-        first = record["first_year_outside_range"]
-        status = "within fitted range to year 30" if first is None else f"outside fitted range from year {first}"
+        first = record["first_year_at_upper_limit"]
+        status = ("below the upper fitted limit to year 30" if first is None
+                  else f"held at the upper fitted limit from year {first}")
         print(f"    {record['equation_id']}  {record['diameter_cm']:g} cm x {record['count']}: "
               f"{record['carbon_kg']:,.2f} kg C now, {record['carbon_year30_kg']:,.2f} kg C at year 30; {status}")
 
@@ -204,21 +205,21 @@ def compare(summaries: dict, expected: dict) -> list:
             problems.append(f"{name}: site missing from the results")
             continue
         for year in CHECK_YEARS:
-            for field in ("tree", "shrub", "total", "extrapolated"):
+            for field in ("tree", "shrub", "total", "at_upper_limit"):
                 a, b = got["stocks_kg_c"][str(year)][field], want["stocks_kg_c"][str(year)][field]
                 if abs(a - b) > STOCK_TOLERANCE_KG:
                     problems.append(f"{name}: year {year} {field} = {a:.2f}, expected {b:.2f}")
-            a = got["stocks_kg_c"][str(year)]["extrapolated_share_pct"]
-            b = want["stocks_kg_c"][str(year)]["extrapolated_share_pct"]
+            a = got["stocks_kg_c"][str(year)]["at_upper_limit_share_pct"]
+            b = want["stocks_kg_c"][str(year)]["at_upper_limit_share_pct"]
             if abs(a - b) > SHARE_TOLERANCE_PCT:
-                problems.append(f"{name}: year {year} extrapolated share = {a:.1f} %, expected {b:.1f} %")
+                problems.append(f"{name}: year {year} share at upper limit = {a:.1f} %, expected {b:.1f} %")
             a, b = got["with_survival_kg_c"][str(year)], want["with_survival_kg_c"][str(year)]
             if abs(a - b) > STOCK_TOLERANCE_KG:
                 problems.append(f"{name}: year {year} with survival = {a:.2f}, expected {b:.2f}")
-        first_got = {(r["equation_id"], r["diameter_cm"]): r["first_year_outside_range"] for r in got["records"]}
-        first_want = {(r["equation_id"], r["diameter_cm"]): r["first_year_outside_range"] for r in want["records"]}
+        first_got = {(r["equation_id"], r["diameter_cm"]): r["first_year_at_upper_limit"] for r in got["records"]}
+        first_want = {(r["equation_id"], r["diameter_cm"]): r["first_year_at_upper_limit"] for r in want["records"]}
         if first_got != first_want:
-            problems.append(f"{name}: first years outside the fitted range differ: {first_got} != {first_want}")
+            problems.append(f"{name}: first years at the upper fitted limit differ: {first_got} != {first_want}")
         if abs(got["density_year0_kg_c_m2"] - want["density_year0_kg_c_m2"]) > 1e-4:
             problems.append(f"{name}: density = {got['density_year0_kg_c_m2']}, "
                             f"expected {want['density_year0_kg_c_m2']}")

@@ -32,8 +32,14 @@ class ProjectionTests(unittest.TestCase):
                     _, original = project_future_carbon(r.species_data, item.diameter, 2)
                     np.testing.assert_array_equal(carbon, original)
                 else:
-                    self.assertAlmostEqual(values[-1], item.diameter * 1.02 ** 30)
+                    grown = item.diameter * 1.02 ** 30
+                    # Growth stops at the upper fitted limit of the record.
+                    limit = max(r.range_max, item.diameter) if r.has_range else grown
+                    self.assertAlmostEqual(values[-1], min(grown, limit))
                     self.assertAlmostEqual(carbon[-1], lib.carbon_total(r, values[-1], 2, item.var2))
+                if r.has_range:
+                    self.assertLessEqual(values.max(), max(r.range_max, item.diameter) + 1e-12)
+                self.assertTrue(np.all(np.diff(values) >= 0))
                 self.assertTrue(np.isfinite(carbon).all())
 
     def test_snapshot_matches_graph_and_inspection_for_every_record(self):

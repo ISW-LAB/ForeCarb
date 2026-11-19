@@ -24,7 +24,7 @@ from carbon_calculator import species_library as lib
 from carbon_calculator.data import RESTORATION_ENVIRONMENTS
 from carbon_calculator.excel_export import export_all_regions_to_excel, export_carbon1_to_excel
 from carbon_calculator.i18n import tr
-from carbon_calculator.projections import project_record
+from carbon_calculator.projections import held_at_upper_limit, project_record
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 ENV = RESTORATION_ENVIRONMENTS[0]
@@ -130,6 +130,23 @@ class ExtrapolationMathTests(unittest.TestCase):
         extrapolation.summarize([carbon], [inside])
         np.testing.assert_array_equal(carbon, before)
 
+    def test_growth_is_held_at_the_upper_fitted_limit(self) -> None:
+        record = lib.records_for_kind(lib.KIND_SHRUB, ENV)["산철쭉"]
+        _years, values, carbon = project_record(record, 1.2, 40)
+        # No predictor leaves the fitted range, and the stock is constant once the limit is reached.
+        self.assertTrue(extrapolation.within_fitted_range(
+            record.range_min, record.range_max, values).all())
+        self.assertAlmostEqual(float(values[-1]), record.range_max)
+        held = held_at_upper_limit(record, 1.2)
+        self.assertEqual(int(np.flatnonzero(held)[0]), 4)
+        self.assertEqual(len(set(np.round(carbon[4:], 9))), 1)
+        self.assertLess(carbon[3], carbon[4])
+        # Helper functions: a start above the range is never reduced; no range, no limit.
+        self.assertEqual(extrapolation.hold_at_upper_limit(3.0, [2.5, 2.9, 3.3]).tolist(), [2.5, 2.9, 3.0])
+        self.assertEqual(extrapolation.hold_at_upper_limit(3.0, [3.5, 3.9]).tolist(), [3.5, 3.5])
+        self.assertEqual(extrapolation.hold_at_upper_limit(None, [1.0, 9.0]).tolist(), [1.0, 9.0])
+        self.assertIsNone(extrapolation.held_at_upper_limit(None, [1.0, 9.0]))
+
 
 class ProfileOneAuditTests(unittest.TestCase):
     """The worked example of the manuscript, computed from the library without the GUI."""
@@ -139,7 +156,8 @@ class ProfileOneAuditTests(unittest.TestCase):
         for kind, key, diameter, count in PROFILE_1:
             record = lib.records_for_kind(kind, ENV)[key]
             _years, values, carbon = project_record(record, diameter, count)
-            inside = extrapolation.within_fitted_range(record.range_min, record.range_max, values)
+            inside = (extrapolation.within_fitted_range(record.range_min, record.range_max, values)
+                      & ~held_at_upper_limit(record, diameter))
             curves.append(carbon)
             flags.append(inside)
             first[key] = extrapolation.first_year_outside(inside)
@@ -149,18 +167,18 @@ class ProfileOneAuditTests(unittest.TestCase):
         curves, flags, _first = self._project()
         summary = extrapolation.summarize(curves, flags)
         self.assertAlmostEqual(round(float(summary.total[0]), 2), 198.89)
-        self.assertAlmostEqual(round(float(summary.total[15]), 2), 900.20)
-        self.assertAlmostEqual(round(float(summary.total[30]), 2), 3444.50)
+        self.assertAlmostEqual(round(float(summary.total[15]), 2), 797.72)
+        self.assertAlmostEqual(round(float(summary.total[30]), 2), 3063.76)
 
-    def test_extrapolated_share_and_first_years(self) -> None:
+    def test_share_held_at_the_upper_limit_and_first_years(self) -> None:
         curves, flags, first = self._project()
         summary = extrapolation.summarize(curves, flags)
         self.assertEqual(first, {"소나무": 30, "졸참나무": None, "신갈나무": None,
                                  "산철쭉": 4, "병꽃나무": 9})
         self.assertEqual(float(summary.extrapolated[3]), 0.0)
-        self.assertAlmostEqual(round(float(summary.extrapolated[30]), 2), 1590.13)
-        self.assertAlmostEqual(round(summary.share_at(30), 1), 46.2)
-        self.assertAlmostEqual(round(summary.share_at(15), 1), 15.1)
+        self.assertAlmostEqual(round(float(summary.extrapolated[30]), 2), 1209.39)
+        self.assertAlmostEqual(round(summary.share_at(30), 1), 39.5)
+        self.assertAlmostEqual(round(summary.share_at(15), 1), 4.2)
 
 
 class EquationIdTests(unittest.TestCase):
@@ -229,18 +247,18 @@ class ReportTests(unittest.TestCase):
     def tearDown(self) -> None:
         input_limits.reset_planting_unit_areas()
 
-    def test_profile_1_report_records_equations_and_the_extrapolated_share(self) -> None:
+    def test_profile_1_report_records_equations_and_the_share_at_the_upper_limit(self) -> None:
         with assessment_window(region_name="Profile 1", area_w=20, area_h=20) as (window, messages):
             for kind, key, diameter, count in PROFILE_1:
                 window._append_row(kind, key, diameter, count)
             window.on_calculate()
             self.assertEqual(messages, [])
             window.year_slider.setValue(30)
-            self.assertIn("46.2", window._tree_basis_note.text())
-            self.assertIn("39.2", window._tree_basis_note.text())
+            self.assertIn("39.5", window._tree_basis_note.text())
+            self.assertIn("38.8", window._tree_basis_note.text())
             self.assertIn("100.0", window._shrub_basis_note.text())
             window.year_slider.setValue(3)
-            self.assertIn(tr("{year}년: {kind} 추정이 모두 적합범위 안 (첫 외삽: {first}년)")
+            self.assertIn(tr("{year}년: {kind} 항목이 모두 적합범위 상한 아래 (첫 상한 도달: {first}년)")
                           .format(year=3, kind=tr("관목"), first=4), window._shrub_basis_note.text())
             payload = window.build_export_payload()
             with TemporaryDirectory() as tmp:
@@ -253,30 +271,30 @@ class ReportTests(unittest.TestCase):
                                          tr("적합범위_점검"), tr("그래프")])
         details = table_rows(wb[tr("계산근거")], tr("구분"), tr("식 ID"))
         self.assertEqual([row[tr("식 ID")] for row in details], ["T01", "T04", "T07", "S02", "S10"])
-        self.assertEqual([row[tr("범위 이탈 첫 연차")] for row in details],
-                         ["30", tr("없음 (30년까지 범위 안)"), tr("없음 (30년까지 범위 안)"), "4", "9"])
+        self.assertEqual([row[tr("상한 도달 첫 연차")] for row in details],
+                         ["30", tr("없음 (30년까지 상한 아래)"), tr("없음 (30년까지 상한 아래)"), "4", "9"])
         self.assertEqual({row[tr("계수 변경")] for row in details}, {tr("없음")})
         self.assertEqual([row[tr("식 입력 배율 q")] for row in details], [1, 1, 1, 10, 10])
         pine = details[0]
         self.assertEqual(pine[tr("적용 식")], "Y = 0.0737 × X^2.5735")
         self.assertAlmostEqual(pine[tr("개체 바이오매스(kg)")], 0.0737 * 5.0 ** 2.5735, places=5)
         self.assertAlmostEqual(pine[tr("탄소저장량(kgC)")], 69.5598, places=3)
-        self.assertAlmostEqual(pine[tr("30년 설명변수 값")], 15.1, places=6)
-        self.assertEqual(pine[tr("30년 추정 상태")], tr("외삽 (범위 밖)"))
-        self.assertEqual(details[1][tr("30년 추정 상태")], tr("범위 안"))
+        self.assertAlmostEqual(pine[tr("30년 설명변수 값")], 15.0, places=6)
+        self.assertEqual(pine[tr("30년 추정 상태")], tr("상한 고정"))
+        self.assertEqual(details[1][tr("30년 추정 상태")], tr("상한 아래"))
         self.assertAlmostEqual(sum(row[tr("탄소저장량(kgC)")] for row in details), 198.89, places=2)
 
         audit = wb[tr("적합범위_점검")]
         header = [audit.cell(4, c).value for c in range(1, audit.max_column + 1)]
         self.assertEqual(header[:9], [
-            tr("경과연도(년)"), tr("교목 합계(kgC)"), tr("교목 외삽(kgC)"), tr("관목 합계(kgC)"),
-            tr("관목 외삽(kgC)"), tr("대상지 합계(kgC)"), tr("대상지 외삽(kgC)"),
-            tr("외삽 비율(%)"), tr("범위 미제공(kgC)")])
+            tr("경과연도(년)"), tr("교목 합계(kgC)"), tr("교목 상한 고정(kgC)"), tr("관목 합계(kgC)"),
+            tr("관목 상한 고정(kgC)"), tr("대상지 합계(kgC)"), tr("대상지 상한 고정(kgC)"),
+            tr("상한 고정 비율(%)"), tr("범위 미제공(kgC)")])
         year30 = [audit.cell(35, c).value for c in range(1, audit.max_column + 1)]
         self.assertEqual(year30[0], 30)
-        self.assertAlmostEqual(year30[5], 3444.50, places=2)
-        self.assertAlmostEqual(year30[6], 1590.13, places=2)
-        self.assertAlmostEqual(year30[7], 46.16, places=2)
+        self.assertAlmostEqual(year30[5], 3063.76, places=2)
+        self.assertAlmostEqual(year30[6], 1209.39, places=2)
+        self.assertAlmostEqual(year30[7], 39.47, places=2)
         self.assertEqual(year30[9:], [0, 1, 1, 0, 0])          # v(t) of the five records
         year3 = [audit.cell(8, c).value for c in range(1, audit.max_column + 1)]
         self.assertEqual((year3[0], year3[6], year3[9:]), (3, 0, [1, 1, 1, 1, 1]))
@@ -310,7 +328,7 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(details[1][tr("계수 변경")], tr("없음"))
         self.assertIn("1.02^t", details[1][tr("연간 직경 생장량(cm/yr, 1~10/11~20/21~30년)")])
         self.assertEqual(details[1][tr("컬렉션")], tr("국내"))
-        self.assertEqual(details[2][tr("범위 이탈 첫 연차")], tr("점검 불가 (범위 미제공)"))
+        self.assertEqual(details[2][tr("상한 도달 첫 연차")], tr("점검 불가 (범위 미제공)"))
         self.assertEqual(details[2][tr("적합범위")], tr("미제공"))
 
         excluded = table_rows(ws, tr("구분"), tr("수종"))
@@ -330,7 +348,7 @@ class ReportTests(unittest.TestCase):
         self.assertEqual({row[tr("지역")] for row in rows_all}, {"A"})
         audit_all = wb_all[tr("적합범위_점검")]
         self.assertEqual([audit_all.cell(4, c).value for c in (2, 3, 4)],
-                         [tr("합계(kgC)"), tr("외삽(kgC)"), tr("외삽 비율(%)")])
+                         [tr("합계(kgC)"), tr("상한 고정(kgC)"), tr("상한 고정 비율(%)")])
         self.assertEqual(audit_all.cell(35, 1).value, 30)
 
     def test_exports_accept_payloads_without_the_optional_audit_fields(self) -> None:
@@ -357,22 +375,22 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(len(table_rows(wb[tr("계산근거")], tr("구분"), tr("식 ID"))), 1)
         self.assertEqual(wb_all[tr("적합범위_점검")].cell(4, 1).value, tr("추정 데이터가 없습니다."))
 
-    def test_figures_mark_extrapolated_estimates(self) -> None:
+    def test_figures_mark_records_held_at_the_upper_limit(self) -> None:
         with assessment_window(region_name="Profile 1", area_w=20, area_h=20) as (window, _messages):
             for kind, key, diameter, count in PROFILE_1:
                 window._append_row(kind, key, diameter, count)
             window.on_calculate()
-            for canvas, share in ((window.tree_canvas, "39.2"), (window.shrub_canvas, "100.0")):
+            for canvas, share in ((window.tree_canvas, "38.8"), (window.shrub_canvas, "100.0")):
                 legend = [t.get_text() for t in canvas.ax.get_legend().get_texts()]
-                self.assertIn(tr("적합범위 밖(외삽)"), legend)
-                self.assertIn(tr("합계 중 외삽분"), legend)
+                self.assertIn(tr("적합범위 상한에 고정"), legend)
+                self.assertIn(tr("합계 중 상한 고정분"), legend)
                 notes = [t.get_text() for t in canvas.ax.texts]
-                self.assertIn(tr("{year}년 외삽 비율: {share:.1f} %").format(year=30, share=float(share)),
+                self.assertIn(tr("{year}년 상한 고정 비율: {share:.1f} %").format(year=30, share=float(share)),
                               "\n".join(notes))
-                self.assertIn(tr("대상지 전체 외삽 비율: {share:.1f} %").format(share=46.2),
+                self.assertIn(tr("대상지 전체 상한 고정 비율: {share:.1f} %").format(share=39.5),
                               "\n".join(notes))
             window.year_slider.setValue(15)
-            self.assertIn("15.1", window._tree_basis_note.text())
+            self.assertIn("4.2", window._tree_basis_note.text())
             png = window.figure_png(window.shrub_canvas, (13.5, 6.0))
             self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
             # Rendering for export must leave the on-screen figure size untouched.
@@ -386,7 +404,7 @@ class ReportTests(unittest.TestCase):
             window._append_row("tree", "신갈나무", 8.0, 15)
             window.on_calculate()
             legend = [t.get_text() for t in window.tree_canvas.ax.get_legend().get_texts()]
-            self.assertNotIn(tr("적합범위 밖(외삽)"), legend)
+            self.assertNotIn(tr("적합범위 상한에 고정"), legend)
             self.assertEqual([t.get_text() for t in window.tree_canvas.ax.texts if t.get_text()], [])
             self.assertEqual(window._tree_basis_note.text(), "")
 
@@ -473,8 +491,8 @@ class ReproducibleExampleTests(unittest.TestCase):
         self.assertEqual(len(expected), 4)
         p1 = expected["Profile 1"]
         self.assertEqual(p1["stocks_kg_c"]["0"]["total"], 198.89)
-        self.assertEqual(p1["stocks_kg_c"]["30"]["total"], 3444.5)
-        self.assertEqual(p1["stocks_kg_c"]["30"]["extrapolated_share_pct"], 46.2)
+        self.assertEqual(p1["stocks_kg_c"]["30"]["total"], 3063.76)
+        self.assertEqual(p1["stocks_kg_c"]["30"]["at_upper_limit_share_pct"], 39.5)
         self.assertEqual(expected["Profile 2"]["stocks_kg_c"]["0"]["total"], 824.88)
         self.assertEqual(expected["Profile 3"]["stocks_kg_c"]["0"]["total"], 109.08)
         with TemporaryDirectory() as tmp:

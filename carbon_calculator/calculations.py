@@ -149,7 +149,10 @@ def project_future_carbon(species_data: SpeciesData,
 
     계수 적합 단위가 mm인 레코드는 직경 시계열 자체가 아니라 식 평가 입력만
     원 단위로 변환하므로 DBH와 RCD 시나리오가 동일한 cm 계약을 사용한다.
+    직경은 식의 적합범위 상한에 닿으면 그 값에서 멈춘다(범위 밖 추정 없음).
     """
+    from .extrapolation import hold_at_upper_limit
+
     years_arr = np.arange(0, years + 1)
     diameter_arr = np.zeros(years + 1, dtype=float)
     diameter_arr[0] = starting_diameter
@@ -157,6 +160,7 @@ def project_future_carbon(species_data: SpeciesData,
     for i in range(1, years + 1):
         growth = species_data.growth_at_year(i)
         diameter_arr[i] = diameter_arr[i - 1] + growth
+    diameter_arr = hold_at_upper_limit(species_data.diameter_max, diameter_arr)
 
     equation_diameters = species_data.to_equation_diameter(diameter_arr)
     carbon_per = species_data.a * (equation_diameters ** species_data.b) * species_data.cf

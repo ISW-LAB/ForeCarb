@@ -7,7 +7,7 @@ The executable and installer checks below describe the v1.0 build; they have
 not been repeated for v1.1. Rebuild the executables and the installer from the
 exact source commit cited in the revised manuscript and replace the checksums below before distributing binaries.
 
-The v1.1 source suite also checks category and whole-site extrapolation annotations.
+The v1.1 source suite also checks the category and whole-site annotations for records held at the upper fitted limit.
 Figure 5 (3D stands of Profile 1) was rendered from the application with
 PyVista off screen. Figure 6 contains values read from the regenerated
 workbooks of Profiles 1–3. The source is tagged `v1.1`; no v1.1 binaries were built.
@@ -22,7 +22,7 @@ workbooks of Profiles 1–3. The source is tagged `v1.1`; no v1.1 binaries were 
 
 ## Checks performed
 
-1. `python -m unittest discover -s tests -v`: 80 tests passed, including the
+1. `python -m unittest discover -s tests -v`: 81 tests passed, including the
    English coverage of both UIs (the assessment app and the Equation Library
    Manager, which carries its own translation table), the
    shared-centimeter DBH/RCD contract, legacy shrub-equation equivalence,

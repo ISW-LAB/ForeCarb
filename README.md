@@ -32,7 +32,7 @@ This README describes ForeCarb v1.1 and follows the accompanying manuscript. Fig
 [1. Architecture](#1-architecture-and-workflow) · [2. Equation library](#2-equation-library) · [3. Calculation](#3-calculation) · [4. Illustrative examples](#4-illustrative-examples) · [Limitations](#limitations-and-future-improvements) · [5. Install](#5-install-and-run) · [6. Edit & deploy](#6-edit-and-deploy-the-equation-library) · [7. Build](#7-build) · [8. Tests](#8-tests) · [9. Layout](#9-repository-layout) · [10. Citation](#10-citation) · [11. License](#11-license)
 
 > [!IMPORTANT]
-> **Scope.** Allometric equations define diameter–biomass relationships; diameter development is prescribed separately through annual increments. Trajectories are therefore **deterministic outcomes under the specified growth assumptions** — not validated predictions. Estimates beyond the fitted diameter range are **extrapolations**. The baseline scenario assumes that all planted individuals survive throughout the projection horizon; optional per-species survival rates produce a separate, survival-adjusted result (Section 3). Planting-area footprints and 3D geometry are software-defined settings, not ecological carrying capacity, appropriate planting density, or measured plant architecture. Confirm that the response variable, biomass component, predictor units, and measurement protocol match the intended assessment context.
+> **Scope.** Allometric equations define diameter–biomass relationships; diameter development is prescribed separately through annual increments. Trajectories are therefore **deterministic outcomes under the specified growth assumptions** — not validated predictions. Projected diameters are **held at the upper fitted limit** of the selected equation, so no estimate is an extrapolation; growth beyond the fitted range is not represented. The baseline scenario assumes that all planted individuals survive throughout the projection horizon; optional per-species survival rates produce a separate, survival-adjusted result (Section 3). Planting-area footprints and 3D geometry are software-defined settings, not ecological carrying capacity, appropriate planting density, or measured plant architecture. Confirm that the response variable, biomass component, predictor units, and measurement protocol match the intended assessment context.
 
 ---
 
@@ -182,13 +182,13 @@ v_i(t) = 1 if D_min,i ≤ D_i(t) ≤ D_max,i, else 0                       … E
 | `D_i(t)` | DBH or RCD **in cm** at year `t`; current stock at `t = 0` |
 | `q_i` | Predictor scaling — `1` for cm-based tree equations, `10` for mm-based shrub equations |
 | `n_i`, `CF_i` | Represented count; record-level carbon fraction (including overrides) |
-| `v_i(t) = 0` | Post-calculation audit flag — estimate obtained by **extrapolation** |
+| `v_i(t) = 0` | Audit flag — record **held at the upper fitted limit** (growth stopped) |
 
 - Eq. (1) aggregates records **individually**, so the site total preserves the power law's nonlinearity.
 - `q_i` belongs to the equation record, so overrides (`a_i`, `b_i`, `CF_i`) never change it.
 - Eq. (3): total stock is **independent of site area**; density varies **inversely** with it.
 - Eq. (2): `α_tree` and `α_shrub` are user settings (**Settings → Planting-area safeguard**; kept for later sessions and written to the report). The defaults correspond to a spacing of 1 m × 1 m and 0.5 m × 0.5 m. They only decide whether the calculation proceeds and never enter the biomass or carbon calculation.
-- Eq. (5) runs **after** calculation and only flags extrapolation — it never alters trajectories. The year-based plots draw estimates outside the fitted range with dotted lines and open markers, shade the extrapolated part of the total and print the extrapolated share at year 30; the line above each plot gives the share for the selected year. The XLSX report records the first year each record leaves its fitted range (`Calculation_details`) and the extrapolated stock and share for every year (`Fitted_range_audit`). Records whose source publishes no fitted range are reported as not auditable.
+- Growth stops at the upper fitted limit: `D_i(t) = min(D_i(t−1) + g_i, D_max,i)`, so every estimate is evaluated within the fitted range. Eq. (5) flags the records held at that limit. The year-based plots draw them with dotted lines and open markers, shade their part of the total and print their share at year 30; the line above each plot gives the share for the selected year. The XLSX report records the first year each record reaches its upper limit (`Calculation_details`) and the stock and share held at the limit for every year (`Fitted_range_audit`). Records whose source publishes no fitted range grow for the whole period and are reported as not auditable.
 - Domestic/international records use `Y_i = f_i(X_i, H_i)` via an AST allowlist (no Python `eval`). Storing no carbon fraction or increments, they apply a fixed **CF₀ = 0.5** and use an assumed 2% annual increase of the first predictor for exploratory scenarios. This is not a measured species-specific growth rate; see [GROWTH_ASSUMPTIONS.md](GROWTH_ASSUMPTIONS.md).
 
 #### Survival-adjusted results (optional)
@@ -226,7 +226,7 @@ The manager maintains records from four collections. Figure 2 shows the interfac
   <img src="figures/paper/fig3_assessment_workflow.png" alt="Integrated assessment workflow for Profile 1" width="100%">
 </p>
 
-> **Figure 3.** Profile 1 dashboard at year 15 (top), displaying 900.20 kg C (year 0: 198.89 kg C); (a) entry dialog with the selected equation and editable parameters; (b) trajectories and species contributions; (c) simulated 3D stand.
+> **Figure 3.** Profile 1 dashboard at year 15 (top), displaying 797.72 kg C (year 0: 198.89 kg C); (a) entry dialog with the selected equation and editable parameters; (b) trajectories and species contributions; (c) simulated 3D stand.
 
 Profile 1 — three tree and two shrub species on a 20 m × 20 m site.
 
@@ -260,21 +260,21 @@ Designed to separate variation from **inventory composition** from that introduc
 
 ### 4.4 Deterministic growth scenario visualization
 
-The scenario illustrates how prescribed diameter increments translate into changes in carbon stock. For Profile 1, total stock increases from **198.89 kg C at year 0** to **3,444.50 kg C at year 30** (Figure 5).
+The scenario illustrates how prescribed diameter increments translate into changes in carbon stock. For Profile 1, total stock increases from **198.89 kg C at year 0** to **3,063.76 kg C at year 30** (Figure 5).
 
 <p align="center">
-  <img src="figures/paper/fig5_growth_3d.png" alt="Simulated 3D stands of Profile 1 at years 0, 15 and 30" width="100%">
+  <img src="figures/paper/fig5_growth_3d.png" alt="Simulated 3D stands of Profile 1 at years 0 and 30" width="100%">
 </p>
 
-> **Figure 5.** Simulated 3D stands of Profile 1 at years 0 (a), 15 (b), and 30 (c) at a common scale, with whole-site totals. Geometry is software-defined.
+> **Figure 5.** Deterministic growth scenario for Profile 1 at year 0 (a) and year 30 (b) with simulated 3D stands. Diameters stop growing at the upper fitted limits, so the stocks shown contain no extrapolation. Geometry is software-defined.
 
-| Year | Trees (kg C) | Shrubs (kg C) | **Total (kg C)** | Extrapolated share |
+| Year | Trees (kg C) | Shrubs (kg C) | **Total (kg C)** | Share held at upper limit |
 |:---:|---:|---:|---:|---:|
 | 0 | 194.15 | 4.74 | **198.89** | 0.0 % |
-| 15 | 763.85 | 136.35 | **900.20** | 15.1 % |
-| 30 | 3,050.16 | 394.34 | **3,444.50** | 46.2 % |
+| 15 | 763.85 | 33.87 | **797.72** | 4.2 % |
+| 30 | 3,029.89 | 33.87 | **3,063.76** | 39.5 % |
 
-**Estimates outside the fitted ranges.** Initial-diameter validation applies only to year 0, so projected diameters can leave the fitted ranges. In Profile 1 three of the five records do (Table 5): *Rhododendron yedoense* f. *poukhanense* from year 4 (2.44 cm > 2.2 cm), *Weigela subsessilis* from year 9 (4.20 cm > 3.9 cm) and *Pinus densiflora* in year 30 (15.1 cm > 15 cm). Such estimates remain in the trajectory but are flagged: the year-based plots and the annual audit in the XLSX report mark them and report the extrapolated share. Its size, and what it means for long-horizon totals, is discussed under [Limitations and future improvements](#limitations-and-future-improvements). The 3D views are software-defined scenario geometry, not measured plant architecture.
+**Growth stops at the upper fitted limits.** Initial-diameter validation applies only to year 0, so projected diameters would eventually leave the fitted ranges. ForeCarb therefore holds each diameter at the upper fitted limit of its equation. In Profile 1 three of the five records reach this limit: *Rhododendron yedoense* f. *poukhanense* in year 4 (2.2 cm), *Weigela subsessilis* in year 9 (3.9 cm) and *Pinus densiflora* in year 30 (15 cm). Their stocks are constant afterwards; the year-based plots and the annual audit in the XLSX report mark them and report their share. Its size, and what it means for long-horizon totals, is discussed under [Limitations and future improvements](#limitations-and-future-improvements). The 3D views are software-defined scenario geometry, not measured plant architecture.
 
 ### 4.5 Two-level record validation and planting-area safeguard
 
@@ -294,28 +294,28 @@ The scenario illustrates how prescribed diameter increments translate into chang
 
 Values outside the fitted ranges were rejected and values at the limits accepted; records bypassing the entry check were excluded during calculation; the area safeguard halted calculation only when the requirement **exceeded** the site area.
 
-#### Table 5. Inputs and outputs of Profiles 1–3 (common-area inventories of Table 3; CF 0.50)
+#### Record-level inputs and outputs of Profiles 1–3 (common-area inventories of Table 3; CF 0.50)
 
-| Profile | ID | Record | D(0) (cm) | n | B(0) (kg) | C(0) (kg C) | D(30) (cm) | C(30) (kg C) | First year outside range |
+| Profile | ID | Record | D(0) (cm) | n | B(0) (kg) | C(0) (kg C) | D(30) (cm) | C(30) (kg C) | First year at upper limit |
 |:---:|:---:|---|---:|---:|---:|---:|---:|---:|:---:|
-| 1 | T01 | *Pinus densiflora* | 5.0 | 30 | 4.637 | 69.56 | 15.1 | 1,195.79 | 30 |
+| 1 | T01 | *Pinus densiflora* | 5.0 | 30 | 4.637 | 69.56 | 15.0 | 1,175.52 | 30 |
 |  | T04 | *Quercus serrata* | 4.0 | 20 | 5.400 | 54.00 | 11.3 | 637.26 | – |
 |  | T07 | *Quercus mongolica* | 8.0 | 15 | 9.412 | 70.59 | 20.0 | 1,217.11 | – |
-|  | S02 | *Rhododendron yedoense* f. *poukhanense* | 1.2 | 40 | 0.1167 | 2.33 | 7.7 | 202.18 | 4 |
-|  | S10 | *Weigela subsessilis* | 1.5 | 25 | 0.1928 | 2.41 | 9.3 | 192.16 | 9 |
-| | | **Site total** | | | | **198.89** | | **3,444.50** | |
-| 2 | T01 | *Pinus densiflora* | 7.0 | 60 | 11.024 | 330.71 | 17.1 | 3,293.85 | 28 |
+|  | S02 | *Rhododendron yedoense* f. *poukhanense* | 1.2 | 40 | 0.1167 | 2.33 | 2.2 | 10.00 | 4 |
+|  | S10 | *Weigela subsessilis* | 1.5 | 25 | 0.1928 | 2.41 | 3.9 | 23.87 | 9 |
+| | | **Site total** | | | | **198.89** | | **3,063.76** | |
+| 2 | T01 | *Pinus densiflora* | 7.0 | 60 | 11.024 | 330.71 | 15.0 | 2,351.04 | 28 |
 |  | T04 | *Quercus serrata* | 8.0 | 25 | 28.044 | 350.55 | 15.3 | 1,636.93 | – |
 |  | T07 | *Quercus mongolica* | 10.0 | 15 | 18.829 | 141.21 | 22.0 | 1,636.65 | – |
-|  | S10 | *Weigela subsessilis* | 1.5 | 25 | 0.1928 | 2.41 | 9.3 | 192.16 | 9 |
-| | | **Site total** | | | | **824.88** | | **6,759.60** | |
+|  | S10 | *Weigela subsessilis* | 1.5 | 25 | 0.1928 | 2.41 | 3.9 | 23.87 | 9 |
+| | | **Site total** | | | | **824.88** | | **5,648.49** | |
 | 3 | T04 | *Quercus serrata* | 4.0 | 20 | 5.400 | 54.00 | 11.3 | 637.26 | – |
 |  | T07 | *Quercus mongolica* | 6.0 | 10 | 3.850 | 19.25 | 18.0 | 584.85 | – |
-|  | S02 | *Rhododendron yedoense* f. *poukhanense* | 1.8 | 120 | 0.3089 | 18.53 | 8.3 | 726.21 | 2 |
-|  | S10 | *Weigela subsessilis* | 2.0 | 90 | 0.3845 | 17.30 | 9.8 | 784.43 | 7 |
-| | | **Site total** | | | | **109.08** | | **2,732.75** | |
+|  | S02 | *Rhododendron yedoense* f. *poukhanense* | 1.8 | 120 | 0.3089 | 18.53 | 2.2 | 30.00 | 2 |
+|  | S10 | *Weigela subsessilis* | 2.0 | 90 | 0.3845 | 17.30 | 3.9 | 85.93 | 7 |
+| | | **Site total** | | | | **109.08** | | **1,338.04** | |
 
-<sub>`D`: DBH/RCD; `n`: count; `B`: individual biomass; `C`: record carbon. Final column: first out-of-range year (–: none through year 30).</sub>
+<sub>`D`: DBH/RCD; `n`: count; `B`: individual biomass; `C`: record carbon. `D(30)` is held at the upper fitted limit once it is reached; final column: first year at this limit (–: not reached through year 30).</sub>
 
 ### 4.6 Result reporting
 
@@ -323,11 +323,11 @@ Values outside the fitted ranges were rejected and values at the limits accepted
   <img src="figures/paper/fig6_xlsx_export.png" alt="Example XLSX output from ForeCarb" width="100%">
 </p>
 
-> **Figure 6.** Selected XLSX fields for Profiles 1–3: (a) stocks/extrapolated shares at selected years; (b) year-0 contributions, IDs, overrides, first out-of-range years, and year-30 status. Species shares use tree/shrub subtotals. Displayed fields are rearranged; complete workbooks retain all records and years.
+> **Figure 6.** Selected XLSX fields for Profiles 1–3: (a) projected stocks by site and year; (b) year-0 species contributions. Species shares use tree/shrub subtotals. Displayed fields are rearranged; complete workbooks retain all records and years.
 
-**(a)** total stock and extrapolated share per profile at selected years · **(b)** species-level stocks and shares, equation IDs, parameter changes, the first year outside the fitted range, and the status at year 30. Additional worksheets hold site-comparison results and associated figures.
+**(a)** tree, shrub and total stocks per profile and year · **(b)** species-level stocks and shares. Additional worksheets hold site-comparison results and associated figures.
 
-Two further worksheets document how each value was obtained. **`Calculation_details`** lists, for every accepted inventory record, the equation ID, collection, library key, equation applied, predictor and input value, predictor scaling `q`, secondary input, biomass per individual, `CF`, count, carbon stock, any user change to `a`, `b` or `CF` (library value → value used), the fitted range, the growth setting, the first year outside the fitted range and the status at year 30; records excluded from the calculation are listed with the reason, and the header gives the software version, the content fingerprint (SHA-256) of the equation library, the site and the planting areas used by the safeguard. **`Fitted_range_audit`** gives, for every year, the totals, the stock obtained by extrapolation, its share, and the flag `v_i(t)` of each record.
+Two further worksheets document how each value was obtained. **`Calculation_details`** lists, for every accepted inventory record, the equation ID, collection, library key, equation applied, predictor and input value, predictor scaling `q`, secondary input, biomass per individual, `CF`, count, carbon stock, any user change to `a`, `b` or `CF` (library value → value used), the fitted range, the growth setting, the first year at the upper fitted limit and the status at year 30; records excluded from the calculation are listed with the reason, and the header gives the software version, the content fingerprint (SHA-256) of the equation library, the site and the planting areas used by the safeguard. **`Fitted_range_audit`** gives, for every year, the totals, the stock of the records held at the upper fitted limit, its share, and the flag `v_i(t)` of each record.
 
 ---
 
@@ -340,7 +340,7 @@ This section follows the Discussion of the manuscript.
 - **Uniform carbon fraction.** A single CF of 0.50 across trees and shrubs ignores species variation; replacing 0.50 by 0.47 reduces the affected estimates by 6 % (S12 already uses 0.45).
 - **Fixed growth intervals.** Fixed 10-year increments can obscure rapid early growth and nonlinear age effects in shrubs.
 - **Multi-stem shrubs.** RCD-only models omit stem number and may miss biomass differences between multi-stem individuals of similar diameter.
-- **Fitted ranges.** Estimates beyond the fitted ranges are flagged without correction. In Profile 1 they supply **15.1 %** of the stock at year 15 and **46.2 %** at year 30 (1,590.13 of 3,444.50 kg C; trees 39.2 %, shrubs 100 %), which limits the interpretation of long-horizon totals.
+- **Fitted ranges.** Growth is stopped at the upper fitted limits to avoid extrapolation (without this limit, 46.2 % of the year-30 stock of Profile 1 would be extrapolated). Records held at a limit contribute constant stocks, so later totals are conservative: in Profile 1 they supply **4.2 %** of the stock at year 15 and **39.5 %** at year 30 (1,209.39 of 3,063.76 kg C; trees 38.8 %, shrubs 100 %), which limits the interpretation of long-horizon totals.
 - **Uncertainty.** Uncertainties in allometric equations, carbon fractions, and growth increments are not propagated; the curves are conditional scenarios rather than confidence intervals.
 
 **Future improvements.** Planned versions will add flexible age-dependent growth functions, species-specific parameters, uncertainty propagation, and independent field validation.
@@ -390,11 +390,11 @@ python reproduce_examples.py --workbook my_sites.xlsx --no-check
 
 The script loads the example workbook [`presets/ForeCarb_데이터_예시.xlsx`](presets/ForeCarb_데이터_예시.xlsx), runs every site through the application code path without opening the GUI (only the 3D renderer is replaced by a stub), prints the stocks at years 0, 15 and 30 with the fitted-range audit, and compares them with [`presets/expected_profiles.json`](presets/expected_profiles.json). It exits with status 0 when all values agree. The report that ForeCarb writes for Profile 1 is provided as [`presets/example_report_Profile_1.xlsx`](presets/example_report_Profile_1.xlsx). Expected totals for Profile 1 (site 20 m × 20 m, site category *post-fire site, natural restoration*):
 
-| Year | Trees (kg C) | Shrubs (kg C) | Total (kg C) | Extrapolated (kg C) | Share |
+| Year | Trees (kg C) | Shrubs (kg C) | Total (kg C) | At upper limit (kg C) | Share |
 |:---:|---:|---:|---:|---:|---:|
 | 0 | 194.15 | 4.74 | **198.89** | 0.00 | 0.0 % |
-| 15 | 763.85 | 136.35 | **900.20** | 136.35 | 15.1 % |
-| 30 | 3,050.16 | 394.34 | **3,444.50** | 1,590.13 | 46.2 % |
+| 15 | 763.85 | 33.87 | **797.72** | 33.87 | 4.2 % |
+| 30 | 3,029.89 | 33.87 | **3,063.76** | 1,209.39 | 39.5 % |
 
 ---
 
@@ -458,7 +458,7 @@ python -m unittest discover -s tests -v
 ├── carbon_calculator/
 │   ├── calculations.py                calculation engine — Eq. (1), (3), stage 6
 │   ├── input_limits.py                planting-area safeguard — Eq. (2), stage 5 (user settings)
-│   ├── extrapolation.py               fitted-range audit — Eq. (5), extrapolated share
+│   ├── extrapolation.py               upper growth limit and fitted-range audit — Eq. (5)
 │   ├── survival.py                    survival-adjusted counts and stocks — Eq. (6)
 │   ├── preset_io.py                   Excel data load/save (Regions + Species sheets)
 │   ├── equation_eval.py               expression evaluation (AST allowlist)

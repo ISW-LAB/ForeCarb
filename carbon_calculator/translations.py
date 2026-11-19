@@ -717,7 +717,7 @@ EN.update({
     "Profile 1 의 위도·경도는 입력 방법을 보여 주기 위한 예시 좌표(국립세종수목원 부근)입니다.":
         "The Profile 1 coordinates are an example only (near the Sejong National Arboretum).",
 })
-# 적합범위 점검(외삽 비율) · 계산근거 시트 · 식재 면적 입력 한도 설정
+# 적합범위 점검(상한 고정 비율) · 계산근거 시트 · 식재 면적 입력 한도 설정
 # (JSON 오버라이드보다 먼저 적용)
 EN.update({
     # ── 식 ID · 입력 대화상자 ──
@@ -727,17 +727,21 @@ EN.update({
         "the library. It is also written to the Excel report.",
 
     # ── 적합범위 점검 (그래프 · 안내) ──
-    "{year}년 외삽 비율: {share:.1f} %": "Extrapolated share at year {year}: {share:.1f} %",
-    "대상지 전체 외삽 비율: {share:.1f} %": "Whole-site extrapolated share: {share:.1f} %",
-    "{year}년: 적합범위 밖(외삽) 추정 {n}개 항목 — {kind} 저장량의 {share:.1f} %, 대상지 전체의 {site:.1f} %":
-        "Year {year}: {n} record(s) outside the fitted range (extrapolated) — {share:.1f} % of the "
+    "{year}년 상한 고정 비율: {share:.1f} %":
+        "Share held at the upper limit at year {year}: {share:.1f} %",
+    "대상지 전체 상한 고정 비율: {share:.1f} %":
+        "Whole-site share held at the upper limit: {share:.1f} %",
+    "{year}년: 적합범위 상한에 고정된 {n}개 항목 — {kind} 저장량의 {share:.1f} %, 대상지 전체의 {site:.1f} %":
+        "Year {year}: {n} record(s) held at the upper fitted limit — {share:.1f} % of the "
         "{kind} stock, {site:.1f} % of the site total",
-    "{year}년: {kind} 추정이 모두 적합범위 안 (첫 외삽: {first}년)":
-        "Year {year}: all {kind} estimates are within the fitted ranges (first extrapolation: year {first})",
+    "{year}년: {kind} 항목이 모두 적합범위 상한 아래 (첫 상한 도달: {first}년)":
+        "Year {year}: all {kind} records are below the upper fitted limits (first limit reached: year {first})",
     "유효범위 미제공 {n}개 항목은 점검 불가":
         "{n} record(s) without a published fitted range cannot be audited",
-    "적합범위 밖(외삽)": "Outside fitted range (extrapolated)",
-    "합계 중 외삽분": "Extrapolated part of total",
+    "적합범위 상한에 고정":
+        "Held at upper fitted limit",
+    "합계 중 상한 고정분":
+        "Part of total held at the limit",
 
     # ── 계산에서 제외된 행 ──
     "수량이 0 이어서 제외": "Excluded: count is zero",
@@ -789,10 +793,10 @@ EN.update({
         "{tn:,} trees × {tu:g} m² + {sn:,} shrubs × {su:g} m² = {req:,.2f} m² required "
         "(site {site:,.2f} m²)",
     "식 ID = 컬렉션(T 교목·S 관목·D 국내·I 국외) + 라이브러리 순번. "
-    "범위 이탈 첫 연차 = 설명변수 추정값이 적합범위를 처음 벗어나는 해(그 뒤 추정은 외삽).":
+    "상한 도달 첫 연차 = 설명변수 추정값이 적합범위 상한에 처음 닿아 고정되는 해(그 뒤로는 생장하지 않음).":
         "Equation ID = collection (T tree, S shrub, D domestic, I international) + position in the "
-        "library. First year outside range = first year in which the projected predictor leaves "
-        "the fitted range (later estimates are extrapolations).",
+        "library. First year at upper limit = first year in which the projected predictor is held "
+        "at the upper fitted limit (no growth afterwards).",
     "계산에 적용된 입력 행": "Inventory records used in the calculation",
     "계산에 적용된 입력 행이 없습니다.": "No inventory record was used in the calculation.",
     "계산에서 제외된 입력 행": "Inventory records excluded from the calculation",
@@ -809,7 +813,8 @@ EN.update({
     "적합범위": "Fitted range",
     "연간 직경 생장량(cm/yr, 1~10/11~20/21~30년)":
         "Annual diameter increment (cm/yr; years 1–10 / 11–20 / 21–30)",
-    "범위 이탈 첫 연차": "First year outside range",
+    "상한 도달 첫 연차":
+        "First year at upper limit",
     "30년 설명변수 값": "Predictor at year 30",
     "30년 탄소저장량(kgC)": "Carbon stock at year 30 (kg C)",
     "30년 추정 상태": "Status at year 30",
@@ -817,30 +822,39 @@ EN.update({
     "미제공": "not published",
     "연 2% 가정": "assumed 2 %/yr",
     "점검 불가 (범위 미제공)": "not auditable (no published range)",
-    "없음 (30년까지 범위 안)": "none (within range to year 30)",
-    "범위 안": "within range",
-    "외삽 (범위 밖)": "extrapolated (outside range)",
+    "없음 (30년까지 상한 아래)":
+        "none (below the limit to year 30)",
+    "상한 아래":
+        "below the limit",
+    "상한 고정":
+        "held at upper limit",
 
     # ── Excel: 적합범위_점검 시트 ──
     "적합범위_점검": "Fitted_range_audit",
-    "적합범위 점검 — 연도별 외삽 추정의 탄소량과 비율":
-        "Fitted-range audit — carbon stock and share of extrapolated estimates by year",
-    "v(t) = 1: 그 해의 설명변수 값이 적합범위 안, 0: 범위 밖(외삽). 점검은 추정값을 바꾸지 않고 표시만 합니다.":
-        "v(t) = 1: the projected predictor is within the fitted range that year; 0: outside "
-        "(extrapolated). The audit labels estimates and never changes them.",
+    "적합범위 점검 — 연도별 상한 고정 항목의 탄소량과 비율":
+        "Fitted-range audit — carbon stock and share of records held at the upper fitted limit by year",
+    "v(t) = 1: 그 해의 설명변수 값이 적합범위 상한 아래, 0: 상한에 고정(생장 정지). 모든 추정은 적합범위 안에서 계산합니다.":
+        "v(t) = 1: the projected predictor is below the upper fitted limit that year; 0: held at "
+        "the limit (growth stopped). All estimates are evaluated within the fitted range.",
     "교목 합계(kgC)": "Trees, total (kg C)",
-    "교목 외삽(kgC)": "Trees, extrapolated (kg C)",
+    "교목 상한 고정(kgC)":
+        "Trees, at upper limit (kg C)",
     "관목 합계(kgC)": "Shrubs, total (kg C)",
-    "관목 외삽(kgC)": "Shrubs, extrapolated (kg C)",
+    "관목 상한 고정(kgC)":
+        "Shrubs, at upper limit (kg C)",
     "대상지 합계(kgC)": "Site total (kg C)",
-    "대상지 외삽(kgC)": "Site, extrapolated (kg C)",
-    "외삽 비율(%)": "Extrapolated share (%)",
+    "대상지 상한 고정(kgC)":
+        "Site, at upper limit (kg C)",
+    "상한 고정 비율(%)":
+        "Share at upper limit (%)",
     "범위 미제공(kgC)": "No published range (kg C)",
-    "지역별 적합범위 점검 — 연도별 외삽 추정의 탄소량과 비율":
-        "Fitted-range audit by site — carbon stock and share of extrapolated estimates by year",
-    "외삽 = 설명변수 추정값이 적용 식의 적합범위 밖인 해의 추정. 행별 표시는 '계산근거' 시트를 보세요.":
-        "Extrapolated = estimates for years in which the projected predictor is outside the fitted "
-        "range of the equation applied. Record-level flags are on the 'Calculation_details' sheet.",
+    "지역별 적합범위 점검 — 연도별 상한 고정 항목의 탄소량과 비율":
+        "Fitted-range audit by site — carbon stock and share of records held at the upper fitted limit by year",
+    "상한 고정 = 설명변수 추정값이 적용 식의 적합범위 상한에 닿아 생장이 멈춘 항목의 추정. 행별 표시는 '계산근거' 시트를 보세요.":
+        "At upper limit = estimates of records whose projected predictor has reached the upper "
+        "fitted limit of the equation applied and is held there. Record-level flags are on the "
+        "'Calculation_details' sheet.",
     "합계(kgC)": "Total (kg C)",
-    "외삽(kgC)": "Extrapolated (kg C)",
+    "상한 고정(kgC)":
+        "At upper limit (kg C)",
 })

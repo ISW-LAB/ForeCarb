@@ -1,16 +1,25 @@
 # SPDX-License-Identifier: MIT
 # -*- coding: utf-8 -*-
-"""Fitted-range audit of projected estimates.
+"""Upper fitted limit of growth scenarios and the fitted-range audit.
 
-The entry and calculation guards only test the *initial* predictor value
-``D_i(0)``.  During a growth scenario the projected value ``D_i(t)`` can leave
-the fitted range of the selected equation; the estimate is then an
-extrapolation.  This module implements the post-calculation audit flag
+The entry and calculation guards test the *initial* predictor value
+``D_i(0)``.  During a growth scenario the projected value would eventually
+exceed the fitted range of the selected equation.  ForeCarb does not
+extrapolate: the predictor is held at the upper fitted limit once it is
+reached,
 
-    v_i(t) = 1  if  D_min,i <= D_i(t) <= D_max,i  else 0
+    D_i(t) = min(D_i(t-1) + g_i(t), D_max,i),
 
-and the site-level share of the carbon stock that is obtained by
-extrapolation.  The audit never alters a trajectory: it only labels it.
+so every estimate is evaluated inside the fitted range.  This module provides
+that limit, the audit flag
+
+    v_i(t) = 1  while the record is still growing (below the limit)
+             0  once it is held at the upper fitted limit (or, for a record
+                that bypassed the entry guard, outside the range)
+
+and the site-level share of the carbon stock that comes from records held at
+the limit.  Stocks of such records are constant, so later totals are
+conservative.
 
 The module is free of Qt so that the graphical interface, the XLSX report and
 the regression tests all use the same numbers.
@@ -43,8 +52,44 @@ def within_fitted_range(range_min: Optional[float], range_max: Optional[float],
     return (arr >= float(range_min) - RANGE_TOLERANCE) & (arr <= float(range_max) + RANGE_TOLERANCE)
 
 
+def upper_growth_limit(range_max: Optional[float], starting_value: float) -> Optional[float]:
+    """Largest predictor value a growth scenario may reach (``None``: no published range).
+
+    A starting value above the fitted range is never reduced; such a record is
+    rejected by the entry guard and only stays where it started.
+    """
+    if range_max is None:
+        return None
+    return max(float(range_max), float(starting_value))
+
+
+def hold_at_upper_limit(range_max: Optional[float], values: Iterable[float]) -> np.ndarray:
+    """Predictor trajectory with growth stopped at the upper fitted limit."""
+    arr = np.array(values, dtype=float)
+    if arr.size == 0:
+        return arr
+    limit = upper_growth_limit(range_max, arr[0])
+    return arr if limit is None else np.minimum(arr, limit)
+
+
+def held_at_upper_limit(range_max: Optional[float], values: Iterable[float]) -> Optional[np.ndarray]:
+    """Boolean array: True for the years in which unconstrained growth exceeds the limit.
+
+    ``values`` is the *unconstrained* trajectory.  Returns ``None`` when the
+    source publishes no fitted range.
+    """
+    arr = np.array(values, dtype=float)
+    if range_max is None or arr.size == 0:
+        return None
+    return arr > upper_growth_limit(range_max, arr[0]) + RANGE_TOLERANCE
+
+
 def first_year_outside(inside: Optional[np.ndarray]) -> Optional[int]:
-    """First scenario year whose estimate is an extrapolation (``None`` if never)."""
+    """First scenario year with ``v_i(t) = 0`` (``None`` if never).
+
+    With growth held at the upper fitted limit this is the first year in which
+    the record is held at that limit.
+    """
     if inside is None:
         return None
     outside = np.flatnonzero(~np.asarray(inside, dtype=bool))
@@ -55,8 +100,10 @@ def first_year_outside(inside: Optional[np.ndarray]) -> Optional[int]:
 class ExtrapolationSummary:
     """Year-by-year split of a carbon total into audited parts (kg C).
 
-    ``total = within + extrapolated + unassessed``.  ``unassessed`` collects the
-    records whose source gives no fitted range.
+    ``total = within + extrapolated + unassessed``.  ``extrapolated`` keeps its
+    historical name: it is the stock of the records with ``v_i(t) = 0``, that
+    is, of the records held at the upper fitted limit.  ``unassessed`` collects
+    the records whose source gives no fitted range.
     """
 
     total: np.ndarray
@@ -69,7 +116,7 @@ class ExtrapolationSummary:
 
     @property
     def share_pct(self) -> np.ndarray:
-        """Extrapolated share of the total in percent (0 where the total is 0)."""
+        """Share of the total held at the upper limit, in percent (0 where the total is 0)."""
         share = np.zeros_like(self.total, dtype=float)
         positive = self.total > 0
         share[positive] = 100.0 * self.extrapolated[positive] / self.total[positive]

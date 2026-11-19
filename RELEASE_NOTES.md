@@ -8,6 +8,22 @@ manuscript examples computed with v1.0 is reproduced.
 
 The release is tagged `v1.1`, which is the version cited in the manuscript; it does not include rebuilt v1.1 binaries. The documentation follows the manuscript: the source compilation defines the response of the 22 core equations as the dry weight of the whole individual (total biomass), and the planting-area defaults are based on crown widths measured in our young-tree and shrub sampling. The README presents the six figures and five tables of the manuscript, lists its main contributions, and summarizes its Discussion under "Limitations and future improvements".
 
+## Growth held at the upper fitted limit
+
+- Projected predictors no longer leave the fitted range of the selected equation:
+  growth stops at the upper fitted limit, `D_i(t) = min(D_i(t-1) + g_i, D_max,i)`
+  (`carbon_calculator/projections.py`, `carbon_calculator/extrapolation.py`).
+  No estimate is obtained by extrapolation. Records without a published range
+  grow for the whole period.
+- The audit flag `v_i(t)` is 0 for a record held at its upper limit. The plots,
+  the line above each plot and the XLSX report show these records and their
+  share of the stock instead of an extrapolated share.
+- Profile 1 totals are 198.89, 797.72 and 3,063.76 kg C at years 0, 15 and 30
+  (900.20 and 3,444.50 kg C before the limit); the share held at the limit is
+  39.5 % at year 30; the limits are reached in years 4, 9 and 30.
+- The items below describe the audit as first released; where they mention
+  extrapolated estimates, read "records held at the upper fitted limit".
+
 ## Fitted-range audit of growth scenarios
 
 - Every projected estimate is now labelled by the audit flag
@@ -61,9 +77,9 @@ The release is tagged `v1.1`, which is the version cited in the manuscript; it d
 ## Verification
 
 - 20 regression tests were added (`tests/test_fitted_range_audit.py`); the suite
-  now has 80 tests. For Profile 1 the tests fix the totals 198.89, 900.20 and
-  3,444.50 kg C at years 0, 15 and 30, the extrapolated share of 46.2 % at
-  year 30, and the first years outside the fitted range (*Rhododendron yedoense*
+  now has 81 tests. For Profile 1 the tests fix the totals 198.89, 797.72 and
+  3,063.76 kg C at years 0, 15 and 30, the share held at the upper limit of
+  39.5 % at year 30, and the first years at the upper fitted limit (*Rhododendron yedoense*
   f. *poukhanense* 4, *Weigela subsessilis* 9, *Pinus densiflora* 30).
 
 # FORECAST-SW v1.0

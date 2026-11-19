@@ -17,12 +17,14 @@ VISUAL_FALLBACK_SOURCE = "Carbon1 3D visual fallback (not a scientific height/cr
 
 
 def diameter_timeline(species_data, starting_diameter: float, *, years: int = 30) -> np.ndarray:
-    """DBH/RCD 공통 cm 계약으로 직경 timeline을 만든다."""
+    """DBH/RCD 공통 cm 계약으로 직경 timeline을 만든다 (적합범위 상한에서 멈춘다)."""
+    from ..extrapolation import hold_at_upper_limit
+
     values = np.zeros(years + 1, dtype=float)
     values[0] = starting_diameter
     for year in range(1, years + 1):
         values[year] = values[year - 1] + species_data.growth_at_year(year)
-    return values
+    return hold_at_upper_limit(species_data.diameter_max, values)
 
 
 def visual_development(elapsed_year: int) -> float:

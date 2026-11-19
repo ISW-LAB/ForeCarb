@@ -47,7 +47,7 @@ from .data import (
 )
 from .excel_export import export_carbon1_to_excel
 from .plotting import MatplotlibCanvas
-from .projections import project_record, assumption_note
+from .projections import project_record, assumption_note, held_at_upper_limit
 from .survival import DEFAULT_SURVIVAL_PCT, survival_factors
 from . import preset_io
 from .ui_scale import apply_dialog_size, pt, px
@@ -1944,10 +1944,14 @@ class MainWindow(QMainWindow):
                 e.record, e.diameter, e.quantity, e.var2,
             )
             years_ref = years
-            # 적합범위 점검: 추정값은 바꾸지 않고, 연도별로 범위 안/밖만 표시한다.
+            # 적합범위 점검: 직경은 적합범위 상한에서 멈춘다(project_record). v(t)=0 은
+            # 그 항목이 상한에 고정된 해(입력 점검을 우회한 범위 밖 값 포함)를 뜻한다.
             e.predictors = predictors
             e.inside = extrapolation.within_fitted_range(
                 e.record.range_min, e.record.range_max, predictors)
+            held = held_at_upper_limit(e.record, e.diameter)
+            if e.inside is not None and held is not None:
+                e.inside = e.inside & ~held
             e.first_outside = extrapolation.first_year_outside(e.inside)
             # 생존률 반영: 탄소량은 개체 수에 비례하므로 전량 생존 곡선에 생존 비율을 곱한다.
             e.surv_factor = survival_factors(e.survival_initial, e.survival_annual, years)
@@ -1963,7 +1967,7 @@ class MainWindow(QMainWindow):
         else:
             self._shrub_years = years_ref
 
-    # ----- 적합범위 점검 (외삽 비율) -----
+    # ----- 적합범위 점검 (상한 고정 비율) -----
 
     def _extrapolation_summary(self, kind: Optional[str] = None
                                ) -> extrapolation.ExtrapolationSummary:
@@ -1977,7 +1981,7 @@ class MainWindow(QMainWindow):
             length=(len(years) if years is not None else 0))
 
     def _refresh_extrapolation_notes(self, year: int) -> None:
-        """연도별 그래프 위 안내: 선택한 연차의 외삽 비율."""
+        """연도별 그래프 위 안내: 선택한 연차에 적합범위 상한에 고정된 항목의 비율."""
         site = self._extrapolation_summary()
         for kind in ("tree", "shrub"):
             note = getattr(self, f"_{kind}_basis_note", None)
@@ -1993,15 +1997,15 @@ class MainWindow(QMainWindow):
                 first_years = [e.first_outside for e in entries if e.first_outside is not None]
                 if outside_now:
                     parts.append(
-                        tr("{year}년: 적합범위 밖(외삽) 추정 {n}개 항목 — {kind} 저장량의 {share:.1f} %, "
+                        tr("{year}년: 적합범위 상한에 고정된 {n}개 항목 — {kind} 저장량의 {share:.1f} %, "
                            "대상지 전체의 {site:.1f} %")
                         .format(year=year, n=outside_now, kind=kind_label,
                                 share=summary.share_at(year), site=site.share_at(year)))
                 elif first_years:
-                    parts.append(tr("{year}년: {kind} 추정이 모두 적합범위 안 (첫 외삽: {first}년)")
+                    parts.append(tr("{year}년: {kind} 항목이 모두 적합범위 상한 아래 (첫 상한 도달: {first}년)")
                                  .format(year=year, kind=kind_label, first=min(first_years)))
                     if site.extrapolated[year] > 0:
-                        parts.append(tr("대상지 전체 외삽 비율: {share:.1f} %")
+                        parts.append(tr("대상지 전체 상한 고정 비율: {share:.1f} %")
                                      .format(share=site.share_at(year)))
                 unassessed = sum(1 for e in entries if e.inside is None)
                 if unassessed:
@@ -2082,7 +2086,7 @@ class MainWindow(QMainWindow):
             return
 
         series: list = []
-        outside: list = []      # series 와 같은 순서 — 연도별 '적합범위 밖' 여부
+        outside: list = []      # series 와 같은 순서 — 연도별 '적합범위 상한에 고정' 여부
         for e, cb in plottable:
             if cb.isChecked():
                 series.append((e.label, years, e.curve, False))
@@ -2104,16 +2108,16 @@ class MainWindow(QMainWindow):
                 tr("{kind}: 표시할 항목을 선택하세요 (그래프 위 체크박스)").format(kind=label_kr))
             return
 
-        # 마지막 연차의 외삽 비율을 그래프 안에 적는다 (내보낸 그림에도 그대로 남는다).
+        # 마지막 연차의 상한 고정 비율을 그래프 안에 적는다 (내보낸 그림에도 그대로 남는다).
         final_year = int(years[-1])
         extrapolation_note = None
         if len(summary.total) and summary.extrapolated[-1] > 0:
             extrapolation_note = (
-                tr("{year}년 외삽 비율: {share:.1f} %")
+                tr("{year}년 상한 고정 비율: {share:.1f} %")
                 .format(year=final_year, share=summary.share_at(final_year)))
         site_summary = self._extrapolation_summary()
         if len(site_summary.total) and site_summary.extrapolated[-1] > 0:
-            site_note = tr("대상지 전체 외삽 비율: {share:.1f} %").format(
+            site_note = tr("대상지 전체 상한 고정 비율: {share:.1f} %").format(
                 share=site_summary.share_at(final_year))
             extrapolation_note = "\n".join(filter(None, (extrapolation_note, site_note)))
 

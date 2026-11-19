@@ -245,11 +245,11 @@ class MatplotlibCanvas(FigureCanvasQTAgg):
 
         적합범위 점검(선택 인자 — 주지 않으면 기존과 똑같이 그린다):
           outside: series 와 같은 순서의 리스트. 각 항목은 연도별 bool 배열
-            (True = 그 해의 추정이 적합 직경범위 밖, 즉 외삽) 또는 None.
-            범위 밖 구간은 같은 색의 점선과 빈 표식으로 바꿔 그린다.
-          extrapolated: 합계 곡선(is_total) 가운데 외삽 추정이 차지하는 탄소량의
+            (True = 그 해에 직경이 적합범위 상한에 고정됨) 또는 None.
+            상한 고정 구간은 같은 색의 점선과 빈 표식으로 바꿔 그린다.
+          extrapolated: 합계 곡선(is_total) 가운데 상한에 고정된 항목이 차지하는 탄소량의
             연도별 배열. 합계 곡선 바로 아래에 그 몫을 빗금 음영으로 표시한다.
-          extrapolation_note: 축 안 왼쪽 위에 적을 안내문(예: 30년 외삽 비율).
+          extrapolation_note: 축 안 왼쪽 위에 적을 안내문(예: 30년 상한 고정 비율).
         """
         # Resolve translated defaults at call time so the selected startup
         # language is reflected even though this module was imported earlier.
@@ -298,12 +298,12 @@ class MatplotlibCanvas(FigureCanvasQTAgg):
             from matplotlib.lines import Line2D
             handles.append(Line2D([], [], color="#555555", linewidth=1.8, linestyle=":",
                                   marker="o", markersize=4.5, markerfacecolor="white"))
-            labels.append(tr("적합범위 밖(외삽)"))
+            labels.append(tr("적합범위 상한에 고정"))
         if shaded_total:
             from matplotlib.patches import Patch
             handles.append(Patch(facecolor="#C0392B", alpha=0.18, hatch="////",
                                  edgecolor="#C0392B", linewidth=0.0))
-            labels.append(tr("합계 중 외삽분"))
+            labels.append(tr("합계 중 상한 고정분"))
         self.ax.legend(
             handles, labels,
             fontsize=_fs(PLOT_LEGEND_PT), loc="upper left", bbox_to_anchor=(1.01, 1.0),
@@ -322,7 +322,7 @@ class MatplotlibCanvas(FigureCanvasQTAgg):
         self.draw_idle()
 
     def _mark_outside_range(self, line, years, carbon, mask) -> bool:
-        """적합범위 밖(외삽) 구간을 같은 색의 점선 + 빈 표식으로 바꿔 그린다.
+        """적합범위 상한에 고정된 구간을 같은 색의 점선 + 빈 표식으로 바꿔 그린다.
 
         원래 곡선(호버 툴팁이 쓰는 아티스트)은 그대로 두고, 범위 밖 구간만 흰 선으로
         덮은 뒤 점선과 빈 표식을 올린다. 표시한 구간이 있으면 True.
@@ -350,14 +350,14 @@ class MatplotlibCanvas(FigureCanvasQTAgg):
         return True
 
     def _shade_extrapolated(self, years, total, extrapolated) -> bool:
-        """합계 곡선 아래에 외삽 추정이 차지하는 몫을 빗금 음영으로 표시한다."""
+        """합계 곡선 아래에 상한에 고정된 항목이 차지하는 몫을 빗금 음영으로 표시한다."""
         if extrapolated is None:
             return False
         part = np.asarray(extrapolated, dtype=float)
         top = np.asarray(total, dtype=float)
         if part.shape != top.shape or not np.any(part > 0):
             return False
-        # 외삽분이 처음 생기는 해의 직전 점부터 칠해, 한 해만 해당해도 쐐기 모양으로 보이게 한다.
+        # 상한 고정분이 처음 생기는 해의 직전 점부터 칠해, 한 해만 해당해도 쐐기 모양으로 보이게 한다.
         where = part > 0
         where[:-1] |= where[1:]
         self.ax.fill_between(
